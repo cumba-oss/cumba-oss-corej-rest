@@ -12,8 +12,8 @@
         ============================================================
     -->
     <groupId>net.cumba</groupId>
-    <artifactId>cumba-oss-clients-parent</artifactId>
-    <packaging>pom</packaging>
+    <artifactId>cumba-oss-corej-rest</artifactId>
+    <packaging>jar</packaging>
     <version>${revision}</version>
 
     <properties>
@@ -51,7 +51,7 @@
         <!-- failOnWarning is bound to a property so a CLI -D can flip it during lint sweeps -->
         <maven.compiler.failOnWarning>true</maven.compiler.failOnWarning>
 
-        <sonar.projectKey>cumba-oss-clients</sonar.projectKey>
+        <sonar.projectKey>cumba-oss-corej-rest</sonar.projectKey>
         <sonar.projectName>Cumba OSS coreJ</sonar.projectName>
         <sonar.sourceEncoding>${general.encoding}</sonar.sourceEncoding>
 
@@ -96,7 +96,7 @@
             The coreJ engine, released from cumba-oss-corej on its own cadence. These are
             EXTERNAL artifacts here - this repository holds only the clients.
         -->
-        <dependency.cumba-oss-corej.version>0.2.0</dependency.cumba-oss-corej.version>
+        <dependency.cumba-oss-corej.version>0.3.0</dependency.cumba-oss-corej.version>
 
         <!-- REST stack -->
         <dependency.spring-boot.version>4.1.1</dependency.spring-boot.version>
@@ -147,7 +147,7 @@
 
             HISTORY, kept because the hold lasted three releases and the reason
             matters if it ever recurs: this repo was pinned at 4.9.8.3 while the
-            newer detectors reported 186 findings in cumba-oss-cdisc-core - 180 of
+            newer detectors reported 186 findings in cumba-oss-corej-core - 180 of
             them NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE across 165 sites in 28
             files. They were REAL, not false positives: model DTOs carry @Nullable
             fields that Lombok copies onto the generated getters, and the codebase
@@ -287,7 +287,7 @@
             (`coverage/`), so one path - this used to be set per profile,
             pointing at coverage/dev or coverage/main.
         -->
-        <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/coverage/target/site/jacoco-aggregate/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+        <sonar.coverage.jacoco.xmlReportPaths>${project.build.directory}/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
 
     </properties>
 
@@ -309,12 +309,7 @@
         Add new lib modules HERE, and to coverage/pom.xml's <dependencies> as
         well - the enforcer rule there fails the build if you forget.
     -->
-    <modules>
-        <module>clients/cumba-oss-cdisc-cli</module>
-        <module>clients/cumba-oss-cdisc-rest</module>
 
-        <module>coverage</module>
-    </modules>
 
 
     <profiles>
@@ -632,7 +627,7 @@
                                     of value is lost by excluding it.
                                 -->
                                 <excludedTestClasses>
-                                    <param>net.cumba.cdisc.core.exec.JoinCacheConcurrencyTest</param>
+                                    <param>net.cumba.corej.core.exec.JoinCacheConcurrencyTest</param>
                                 </excludedTestClasses>
                                 <!--
                                     Pin pitest's own `skipTests` to false. The plugin binds
@@ -982,13 +977,13 @@
                     <!--
                         Keep the test-jar OUT of the Central bundle.
 
-                        cumba-oss-cdisc-core attaches a test-jar so downstream modules can
+                        cumba-oss-corej-core attaches a test-jar so downstream modules can
                         reuse its test helpers. That is useful inside the build, but nothing
                         public consumes it today, and a Central artifact is immutable - so it
                         is not published until something actually needs it.
 
                         ⚠ excludeArtifacts (below) cannot express this: it matches on
-                        artifactId, so excluding cumba-oss-cdisc-core would drop the whole
+                        artifactId, so excluding cumba-oss-corej-core would drop the whole
                         module. Overriding the execution's phase to `none` is what keeps the
                         main jar published and the tests jar unattached. Normal builds are
                         unaffected - the test-jar is still produced and installed locally.
@@ -1148,20 +1143,123 @@
                                 and it fails late — a scoped verify still passes.
                             -->
                             <excludeArtifacts>
-                                <excludeArtifact>coverage</excludeArtifact>
-                                <excludeArtifact>cumba-oss-clients-parent</excludeArtifact>
-                                <excludeArtifact>cumba-oss-cdisc-cli</excludeArtifact>
-                                <excludeArtifact>cumba-oss-cdisc-rest</excludeArtifact>
+                                <!-- Nothing here goes to Maven Central: the REST API is an application,
+                                     delivered as a jar on the release and to the internal Nexus. Single-module
+                                     repo, so the former parent, the coverage aggregator and the CLI (now its
+                                     own repository) are gone from this list. -->
+                                <excludeArtifact>cumba-oss-corej-rest</excludeArtifact>
                             </excludeArtifacts>
                         </configuration>
                     </plugin>
                 </plugins>
             </build>
         </profile>
+        <!-- ===== From the former clients/cumba-oss-corej-rest module pom. This
+             repository is a SINGLE MODULE now: the root pom IS the artifact. ===== -->
+        <!--
+            Opt-in spec generation. Starts the Boot app, dumps /v3/api-docs
+            to target/openapi.json, then stops it. The web module's gen:api
+            prefers this file when present (else its committed snapshot), so
+            the generated TS types track the running API. Does NOT change the
+            default build; activate with `-Pgenerate-openapi`.
+        -->
+        <profile>
+            <id>generate-openapi</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.springframework.boot</groupId>
+                        <artifactId>spring-boot-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>pre</id>
+                                <goals>
+                                    <goal>start</goal>
+                                </goals>
+                            </execution>
+                            <execution>
+                                <id>post</id>
+                                <goals>
+                                    <goal>stop</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.springdoc</groupId>
+                        <artifactId>springdoc-openapi-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>dump</id>
+                                <phase>integration-test</phase>
+                                <goals>
+                                    <goal>generate</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <apiDocsUrl>http://localhost:8080/v3/api-docs</apiDocsUrl>
+                            <outputFileName>openapi.json</outputFileName>
+                            <outputDir>${project.build.directory}</outputDir>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!--
+            Opt-in: bundle a built web SPA into this jar's static/ so the API serves the UI at /
+            on the same origin (a single deployable). The copy is bound to prepare-package so the
+            SPA lands in target/classes/static and is packaged into the (thin) jar. A missing
+            dist/ is skipped with a warning, yielding an API-only jar. Does NOT change the
+            default build:
+              mvn -pl clients/cumba-oss-corej-rest -Pbundle-web clean package -Dweb.dist.dir=/path/to/dist
+
+            ⚠ The SPA is NOT in this repository — it is published separately. In the monorepo this
+            path was the sibling `../corej-cdisc-web/dist`, which does not resolve across the repo
+            split, so the directory is a PROPERTY with no usable default rather than a dead
+            relative path. Point `web.dist.dir` at a built dist/ to use the profile.
+
+            (For the cross-origin alternative — a separately-hosted SPA — add a CORS
+            WebMvcConfigurer bean instead of bundling.)
+        -->
+        <profile>
+            <id>bundle-web</id>
+            <properties>
+                <!-- Overridden with -Dweb.dist.dir=... ; the default does not exist,
+                     so the copy is skipped with a warning rather than copying junk. -->
+                <web.dist.dir>${project.basedir}/web-dist-not-configured</web.dist.dir>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-resources-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>copy-web-dist</id>
+                                <phase>prepare-package</phase>
+                                <goals>
+                                    <goal>copy-resources</goal>
+                                </goals>
+                                <configuration>
+                                    <outputDirectory>${project.build.outputDirectory}/static</outputDirectory>
+                                    <resources>
+                                        <resource>
+                                            <directory>${web.dist.dir}</directory>
+                                        </resource>
+                                    </resources>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
     </profiles>
 
-    <name>Cumba OSS Clients</name>
-    <description>Runnable clients for the coreJ CDISC conformance engine: a validation command-line tool and a Spring Boot REST API.</description>
+    <name>Cumba OSS coreJ REST API</name>
+    <description>Spring Boot REST API over the coreJ CDISC conformance engine: sessions, uploads, check runs and paged findings.</description>
     <!--
         Project URL. REQUIRED by Maven Central, along with <scm>, <developers>,
         <licenses>, <name> and <description>. Points at the PUBLIC GitHub mirror,
@@ -1173,7 +1271,7 @@
         the attribute fixes the <scm> URLs but NOT the project <url> under Maven
         3.9.16 — hence <url> is also declared explicitly in each module pom.
     -->
-    <url child.project.url.inherit.append.path="false">https://github.com/cumba-oss/cumba-oss-clients</url>
+    <url child.project.url.inherit.append.path="false">https://github.com/cumba-oss/cumba-oss-corej-rest</url>
     <organization>
         <name>P300</name>
         <url>https://www.p-300.com</url>
@@ -1214,14 +1312,14 @@
     <!--
         The child.scm.*.inherit.append.path attributes stop Maven appending each
         module's directory to the inherited SCM URLs, which would publish
-        unreachable paths like .../cumba-oss-clients.git/clients/cumba-oss-cdisc-cli.
+        unreachable paths like .../cumba-oss-corej-rest.git/some-module.
     -->
     <scm child.scm.url.inherit.append.path="false"
          child.scm.connection.inherit.append.path="false"
          child.scm.developerConnection.inherit.append.path="false">
-        <connection>scm:git:https://github.com/cumba-oss/cumba-oss-clients.git</connection>
-        <developerConnection>scm:git:ssh://git@github.com/cumba-oss/cumba-oss-clients.git</developerConnection>
-        <url>https://github.com/cumba-oss/cumba-oss-clients</url>
+        <connection>scm:git:https://github.com/cumba-oss/cumba-oss-corej-rest.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/cumba-oss/cumba-oss-corej-rest.git</developerConnection>
+        <url>https://github.com/cumba-oss/cumba-oss-corej-rest</url>
         <tag>HEAD</tag>
     </scm>
 
@@ -1239,17 +1337,17 @@
 
             <dependency>
                 <groupId>${project.groupId}</groupId>
-                <artifactId>cumba-oss-cdisc-core</artifactId>
+                <artifactId>cumba-oss-corej-core</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>${project.groupId}</groupId>
-                <artifactId>cumba-oss-cdisc-report-json</artifactId>
+                <artifactId>cumba-oss-corej-report-json</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>${project.groupId}</groupId>
-                <artifactId>cumba-oss-cdisc-report-xlsx</artifactId>
+                <artifactId>cumba-oss-corej-report-xlsx</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
@@ -1264,7 +1362,7 @@
             <dependency><groupId>net.cumba</groupId><artifactId>cumba-oss-datatable-provider-define</artifactId><version>${dependency.cumba-oss-datatable.version}</version></dependency>
             <dependency><groupId>net.cumba</groupId><artifactId>cumba-oss-datatable-provider-cdt</artifactId><version>${dependency.cumba-oss-datatable.version}</version></dependency>
             <!-- Test helpers extracted from the engine 2026-09-01, published from the
-                 datatable repo since 0.2.0. cumba-oss-cdisc-core takes it at test scope;
+                 datatable repo since 0.2.0. cumba-oss-corej-core takes it at test scope;
                  255 of its test files use MockTable or TestMetadataFixtures. -->
             <dependency><groupId>net.cumba</groupId><artifactId>cumba-oss-datatable-testkit</artifactId><version>${dependency.cumba-oss-datatable.version}</version></dependency>
             <dependency><groupId>net.cumba</groupId><artifactId>cumba-oss-datatable-manager-local</artifactId><version>${dependency.cumba-oss-datatable.version}</version></dependency>
@@ -1275,10 +1373,10 @@
             <dependency><groupId>net.cumba</groupId><artifactId>cumba-oss-datatable-provider-parquet</artifactId><version>${dependency.cumba-oss-datatable.version}</version></dependency>
 
             <!-- Upstream cumba-oss-corej modules (released separately; the engine this repo drives). -->
-            <dependency><groupId>net.cumba</groupId><artifactId>cumba-oss-cdisc-core</artifactId><version>${dependency.cumba-oss-corej.version}</version></dependency>
-            <dependency><groupId>net.cumba</groupId><artifactId>cumba-oss-cdisc-report-json</artifactId><version>${dependency.cumba-oss-corej.version}</version></dependency>
-            <dependency><groupId>net.cumba</groupId><artifactId>cumba-oss-cdisc-report-xlsx</artifactId><version>${dependency.cumba-oss-corej.version}</version></dependency>
-            <dependency><groupId>net.cumba</groupId><artifactId>cumba-oss-cdisc-define-conformance</artifactId><version>${dependency.cumba-oss-corej.version}</version></dependency>
+            <dependency><groupId>net.cumba</groupId><artifactId>cumba-oss-corej-core</artifactId><version>${dependency.cumba-oss-corej.version}</version></dependency>
+            <dependency><groupId>net.cumba</groupId><artifactId>cumba-oss-corej-report-json</artifactId><version>${dependency.cumba-oss-corej.version}</version></dependency>
+            <dependency><groupId>net.cumba</groupId><artifactId>cumba-oss-corej-report-xlsx</artifactId><version>${dependency.cumba-oss-corej.version}</version></dependency>
+            <dependency><groupId>net.cumba</groupId><artifactId>cumba-oss-corej-define-conformance</artifactId><version>${dependency.cumba-oss-corej.version}</version></dependency>
 
             <!-- === Third-party === -->
 
@@ -1367,16 +1465,6 @@
                 <scope>provided</scope>
             </dependency>
 
-                    <dependency>
-                <groupId>${project.groupId}</groupId>
-                <artifactId>cumba-oss-cdisc-core-ruletest</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>${project.groupId}</groupId>
-                <artifactId>cumba-oss-cdisc-define-conformance</artifactId>
-                <version>${project.version}</version>
-            </dependency>
 
             <!-- REST: springdoc OpenAPI / Swagger UI. Pinned above the Spring Boot platform BOM
                  so the BOM (imported last, below) cannot override it. -->
@@ -1427,6 +1515,157 @@
             <groupId>org.jspecify</groupId>
             <artifactId>jspecify</artifactId>
         </dependency>
+        <!-- ===== From the former clients/cumba-oss-corej-rest module pom. This
+             repository is a SINGLE MODULE now: the root pom IS the artifact. ===== -->
+
+        <!-- Spring Boot web + the springdoc starter (OpenAPI 3 + Swagger UI in one). -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+        </dependency>
+
+        <!-- corej engine + the providers the local manager needs to read a study. -->
+        <dependency>
+            <groupId>net.cumba</groupId>
+            <artifactId>cumba-oss-corej-core</artifactId>
+        </dependency>
+
+        <!-- Pluggable report writers: these two modules are what makes -of json / json-2 / xlsx
+             available at runtime. They register with the engine's report SPI through
+             META-INF/services and are referenced by NO import here - drop one and the format
+             simply disappears from the enumerated list (Fix #224). -->
+        <dependency>
+            <groupId>net.cumba</groupId>
+            <artifactId>cumba-oss-corej-report-json</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>net.cumba</groupId>
+            <artifactId>cumba-oss-corej-report-xlsx</artifactId>
+        </dependency>
+        <!-- Apache POI (full XSSF) — the report store renders the XLSX download via
+             net.cumba.corej.core.report.XlsxReportWriter. Declared explicitly (not relied on
+             transitively) because this module references POI types directly. -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>net.cumba</groupId>
+            <artifactId>cumba-oss-cdisc-library</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>net.cumba</groupId>
+            <artifactId>cumba-oss-cdisc-define</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>net.cumba</groupId>
+            <artifactId>cumba-oss-datatable</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>net.cumba</groupId>
+            <artifactId>cumba-oss-datatable-impl</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>net.cumba</groupId>
+            <artifactId>cumba-oss-datatable-manager-local</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>net.cumba</groupId>
+            <artifactId>cumba-oss-datatable-provider-csv</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>net.cumba</groupId>
+            <artifactId>cumba-oss-datatable-provider-define</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>net.cumba</groupId>
+            <artifactId>cumba-oss-datatable-provider-cdt</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>net.cumba</groupId>
+            <artifactId>cumba-oss-datatable-provider-dsj</artifactId>
+        </dependency>
+
+        <!--
+            The three providers below are referenced by NO import in this module: they register
+            with the datatable SPI through META-INF/services, exactly like the report writers
+            above, so dropping one silently narrows what the server can read (Fix #224's shape).
+            Added in wave 38 (PLAN-reference-data-filenames-validation, W37-D1) to match
+            the CLI module — before this the REST server could not open .xpt/.xlsx at all
+            and a .xpt reference-data request died mid-run with a 500.
+
+            ⚠ They are NOT interchangeable, and the asymmetry is deliberate:
+              - provider-sas  registers an IProviderSupplier AND an ILibrarySupplier (XptLibrarySupplier)
+              - provider-xlsx registers an IProviderSupplier AND an ILibrarySupplier (ExcelLibrarySupplier)
+              - provider-parquet registers ONLY an IProviderSupplier
+            ⇒ .xpt/.xls/.xlsx become valid 'referenceDataFilenames' formats; .parquet does NOT and
+            stays a 400. That is F3's ruled category error (a library is a *container* of tables,
+            and a single parquet file has no member namespace), not an oversight — see
+            StudyValidationCheckRunner#requireLibraryFormat. Parquet buys .parquet *dataset*
+            reading only, and it MEASURED 20 jars / 31.8 MB of transitive weight (parquet-mr 1.17.0
+            + hadoop-common 3.4.1 + zstd-jni/snappy codecs) into the dist bundle and the Docker
+            image — 98.7% of this change's +32.19 MB, against 0.42 MB for sas + xlsx combined.
+        -->
+
+        <!-- SAS Transport (.xpt) and SAS dataset (.sas7bdat) reader. -->
+        <dependency>
+            <groupId>net.cumba</groupId>
+            <artifactId>cumba-oss-datatable-provider-sas</artifactId>
+        </dependency>
+
+        <!-- Excel (.xls / .xlsx) reader. -->
+        <dependency>
+            <groupId>net.cumba</groupId>
+            <artifactId>cumba-oss-datatable-provider-xlsx</artifactId>
+        </dependency>
+
+        <!-- Apache Parquet (.parquet) reader. Datasets only — no library supplier. -->
+        <dependency>
+            <groupId>net.cumba</groupId>
+            <artifactId>cumba-oss-datatable-provider-parquet</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>net.cumba</groupId>
+            <artifactId>cumba-oss-web-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+        </dependency>
+
+        <!-- JSpecify nullability annotations (NullAway). -->
+        <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+        </dependency>
+
+        <!-- Logging backend is Logback (the Spring Boot default, pulled in transitively by the
+             starters). The engine logs via java.lang.System.Logger -> JUL; Boot's jul-to-slf4j
+             bridge forwards those records to SLF4J -> Logback, where RunLogDebugCapture taps the
+             engine logger with a Logback appender. Do NOT add slf4j-jdk14 / log4j-to-jul here:
+             a second SLF4J binding makes SLF4J bind to JUL instead of Logback, which both defeats
+             RunLogDebugCapture and trips Boot's LogbackLoggingSystem "not a Logback LoggerContext"
+             assertion at startup. -->
+
+        <!-- Test: Boot test slice (JUnit 5 + assertions + Mockito) for controller/service tests. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Boot 4 split the MockMvc/@WebMvcTest test slice into its own module. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
     </dependencies>
 
     <build>
@@ -1458,7 +1697,7 @@
             <plugins>
 
                 <!-- Managed unconditionally, not only inside deploy-central:
-                     cumba-oss-cdisc-core declares a maven-javadoc-plugin block in
+                     cumba-oss-corej-core declares a maven-javadoc-plugin block in
                      <build><plugins> to carry its sourceFileExcludes (ExprLowering.java,
                      a Lombok-generated signature javadoc cannot resolve). Without a
                      managed version that block binds to whatever version the running
@@ -2006,6 +2245,17 @@
                 <artifactId>spotless-maven-plugin</artifactId>
             </plugin>
 
+        
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- Spring MVC resolves @PathVariable/@RequestParam names from method
+                         parameter names; -parameters keeps them in the bytecode (the Boot
+                         starter-parent enables this by default, but we inherit cumba-oss-corej-rest-parent). -->
+                    <parameters>true</parameters>
+                </configuration>
+            </plugin>
         </plugins>
 
     </build>

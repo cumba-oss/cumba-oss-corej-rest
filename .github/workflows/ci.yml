@@ -58,7 +58,7 @@ jobs:
     # The mutation pass is single-threaded and by far the longest step; cap the
     # job so a hung minion cannot hold a runner indefinitely.
     #
-    # ⚠ 120, not the 45 the other cumba-oss repos use. cumba-oss-cdisc-core
+    # ⚠ 120, not the 45 the other cumba-oss repos use. cumba-oss-corej-core
     # generates ~14,400 mutations - an order of magnitude more than any module in
     # commons / formats / datatable, whose whole build job finishes in 1-3 minutes.
     # The first public run was CANCELLED at exactly 45m24s with Pitest still going
@@ -248,7 +248,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: release-jars
-          path: clients/*/target/*-${{ steps.ver.outputs.version }}.jar
+          # ⚠ target/, not clients/*/target/ — single module now, and
+          #   upload-artifact only WARNS on a no-match.
+          path: target/*-${{ steps.ver.outputs.version }}.jar
           # ⚠ clients/, not lib/ — this repo's modules live under clients/. The
           #    scaffold's lib/ glob matched NOTHING here, and because these modules
           #    are not published to Central the GitHub release is the ONLY delivery:

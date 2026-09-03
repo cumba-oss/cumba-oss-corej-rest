@@ -35,7 +35,7 @@
 
             This project completed a repo-wide JSpecify rollout, so 4.10 suddenly sees
             @Nullable annotations that 4.9.8.3 ignored entirely. Measured in THIS repository
-            on 2026-09-02, with the SpotBugs bump to 4.10.4.0: cumba-oss-cdisc-core reports
+            on 2026-09-02, with the SpotBugs bump to 4.10.4.0: cumba-oss-corej-core reports
             188 of this pattern where 4.9.8.3 reported none. They concentrate in the tolerant
             wire-format CDISC rule model, whose Lombok @Data getters return @Nullable fields:
             Rule 48, Operation 44, CheckConditionLeaf 23, RulePackage 15, Scope 9,
@@ -43,7 +43,7 @@
 
             Those 188 were classified, not assumed: all 22 distinct callees are inside
             net.cumba (ZERO third-party callees), and the 12 findings carrying no
-            METHOD_CALLED role are self-calls within net.cumba.cdisc.core.
+            METHOD_CALLED role are self-calls within net.cumba.corej.core.
 
             NullAway already enforces exactly this contract over exactly that surface, with a
             COMPLETE JSpecify implementation, and more strictly than SpotBugs is being asked
@@ -85,7 +85,7 @@
             ServiceReportManager$SupplierFactory.getSuppliers, each a bare
             `return super.getSuppliers();`. Widening on override is the point; nothing that
             was meant to stay hidden is exposed. Both re-verified present in
-            cumba-oss-cdisc-core on 2026-09-02.
+            cumba-oss-corej-core on 2026-09-02.
         -->
         <Bug pattern="IAOM_DO_NOT_INCREASE_METHOD_ACCESSIBILITY" />
     </Match>

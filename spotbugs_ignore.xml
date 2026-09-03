@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+
+    <!-- ================================================================ -->
+    <!-- Targeted suppressions                                            -->
+    <!--    One <Match> per unique (class, bug pattern) tuple.            -->
+    <!-- ================================================================ -->
+
+    <Match>
+        <!-- EI_EXPOSE_REP: @ConfigurationProperties accessors return their
+             nested config objects by reference on purpose — Spring binds
+             values onto those very instances. There is nothing mutable to
+             defensively copy here; the objects are the binding target. -->
+        <Or>
+            <Class name="net.cumba.corej.rest.config.CorejProperties" />
+            <Class name="net.cumba.corej.rest.config.CorejProperties$Reports" />
+        </Or>
+        <Bug pattern="EI_EXPOSE_REP" />
+    </Match>
+
+    <Match>
+        <!-- EI_EXPOSE_REP2: constructors store Spring-injected singleton
+             collaborators (registries, the run executor, the findings
+             store). Holding the injected reference is the whole point of
+             constructor injection; copying a Spring bean is neither
+             possible nor desirable. -->
+        <Or>
+            <Class name="net.cumba.corej.rest.web.SessionController" />
+            <Class name="net.cumba.corej.rest.web.CheckController" />
+            <Class name="net.cumba.corej.rest.run.RunExecutor" />
+            <Class name="net.cumba.corej.rest.run.RunRegistry" />
+            <Class name="net.cumba.corej.rest.run.StudyValidationCheckRunner" />
+            <Class name="net.cumba.corej.rest.session.UrlFileFetcher" />
+        </Or>
+        <Method name="&lt;init&gt;" />
+        <Bug pattern="EI_EXPOSE_REP2" />
+    </Match>
+
+    <Match>
+        <!-- NM_CONFUSING: DatasetDetail.filename() (a report row) and
+             RunLog$DomainLogEntry.fileName() (an execution-log row) are
+             independent DTOs serving different endpoints. The casing
+             difference is incidental, not a genuine naming hazard. -->
+        <Or>
+            <Class name="net.cumba.corej.rest.report.DatasetDetail" />
+            <Class name="net.cumba.corej.rest.report.RunLog$DomainLogEntry" />
+        </Or>
+        <Bug pattern="NM_CONFUSING" />
+    </Match>
+
+    <Match>
+        <!-- PZLA_PREFER_ZERO_LENGTH_ARRAYS: parsePack returns null to mean
+             "this file is not a rule pack" (templates / placeholders /
+             *-additions / non-matching names), which is semantically distinct
+             from a matched pack with empty parts. Callers null-check the
+             result; a zero-length array would lose that distinction. -->
+        <Class name="net.cumba.corej.rest.web.MetaController" />
+        <Method name="parsePack" />
+        <Bug pattern="PZLA_PREFER_ZERO_LENGTH_ARRAYS" />
+    </Match>
+
+    <Match>
+        <!-- EI_EXPOSE_REP: FindingRow.keys() and V2Findings$Row.keys() return a
+             record component that the compact constructor has ALREADY defensively
+             copied and wrapped in Collections.unmodifiableMap. SpotBugs does not
+             recognise that view type as immutable the way it recognises List.copyOf
+             / Map.copyOf, so it flags the accessor regardless.
+
+             Map.copyOf is not available here: a record key value may legitimately
+             be null — the engine leaves a key column empty when the row does not
+             carry it, and V2Findings.keys() accepts JSON null for exactly that
+             reason — while Map.copyOf rejects null values outright. The map is
+             therefore an order-preserving LinkedHashMap wrapped unmodifiable.
+
+             Nothing mutable escapes; the finding is structural. -->
+        <Or>
+            <Class name="net.cumba.corej.rest.report.FindingRow" />
+            <Class name="net.cumba.corej.rest.report.V2Findings$Row" />
+        </Or>
+        <Method name="keys" />
+        <Bug pattern="EI_EXPOSE_REP" />
+    </Match>
+
+</FindBugsFilter>

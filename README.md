@@ -5,8 +5,7 @@ conformance engine: a validation command-line tool and a Spring Boot REST API.
 
 | Module | What it is |
 |---|---|
-| [`clients/cumba-oss-cdisc-cli`](clients/cumba-oss-cdisc-cli) | Headless CLI — load a study, run a rule package, write a JSON/XLSX report |
-| [`clients/cumba-oss-cdisc-rest`](clients/cumba-oss-cdisc-rest) | REST API over the same engine, with OpenAPI / Swagger UI |
+| [`clients/cumba-oss-corej-rest`](clients/cumba-oss-corej-rest) | REST API over the same engine, with OpenAPI / Swagger UI |
 
 ## ⛔ Nothing here is published to Maven Central
 
@@ -36,7 +35,6 @@ mvn -B clean install -Drevision=0.2.0-SNAPSHOT \
 ## Running
 
 The CLI is a plain jar with a `Main-Class`; see its
-[README](clients/cumba-oss-cdisc-cli/README.md). The REST API is a Spring Boot
 application configured under the `corej:` key in `application.yaml`, with `COREJ_*`
 environment variables for the common settings.
 
