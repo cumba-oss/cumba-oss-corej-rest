@@ -20,7 +20,21 @@ public class InfoController
 
     private static final String SERVICE = "corej-cdisc-rest";
 
-    private static final String VERSION = VersionInfo.forArtifact(SERVICE).version();
+    /**
+     * This module's Maven artifact id — the key {@link VersionInfo#forArtifact(String)} matches
+     * against the {@code artifactId} recorded in each jar's filtered {@code version.properties}.
+     *
+     * <p>
+     * ⛔ Deliberately <b>not</b> {@link #SERVICE}: the service name is the published
+     * {@code spring.application.name} and is unrelated to the Maven coordinates. Passing it here
+     * matched no {@code version.properties} on the classpath, so the endpoint reported
+     * {@code version: "unknown"}. This constant must track {@code <artifactId>} in this module's
+     * pom; it is independent of {@code ${revision}}, so a version bump cannot break it.
+     * </p>
+     */
+    private static final String ARTIFACT_ID = "cumba-oss-corej-rest";
+
+    private static final String VERSION = VersionInfo.forArtifact(ARTIFACT_ID).version();
 
     /**
      * Service identity + version. Used as a liveness probe and an OpenAPI smoke endpoint. The
