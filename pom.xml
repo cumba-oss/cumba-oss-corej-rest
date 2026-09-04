@@ -1230,7 +1230,7 @@
               mvn -pl clients/cumba-oss-corej-rest -Pbundle-web clean package -Dweb.dist.dir=/path/to/dist
 
             ⚠ The SPA is NOT in this repository — it is published separately. In the monorepo this
-            path was the sibling `../corej-cdisc-web/dist`, which does not resolve across the repo
+            path was the sibling `../corej-web/dist`, which does not resolve across the repo
             split, so the directory is a PROPERTY with no usable default rather than a dead
             relative path. Point `web.dist.dir` at a built dist/ to use the profile.
 
