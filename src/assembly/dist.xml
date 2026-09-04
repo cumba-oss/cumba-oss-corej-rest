@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    The runnable coreJ REST API distribution.
+
+    Layout produced (see README.md § Running):
+
+        cumba-oss-corej-rest-<version>/
+        ├── cumba-oss-corej-rest.jar     the cumba-oss-bootstrap launcher
+        ├── cumba-oss-corej-rest.conf    its sidecar config — editable after unzip
+        ├── run.sh   run.bat
+        ├── config/                     external Spring config (application.yaml)
+        ├── rules/  rules-define/  dictionaries/   (empty; each with a README)
+        └── lib/                        this project's jar + every runtime dependency
+
+    ⭐ The launcher jar and the .conf MUST share a basename: the launcher strips
+    ".jar" off the jar it was loaded from, appends ".conf", and resolves that as a
+    sibling. That is the entire reason for <outputFileNameMapping> below — without
+    it the launcher keeps its version in the file name and the sidecar would have to
+    be renamed on every release.
+
+    ⚠ DIFFERENT FROM THE MONOREPO TEMPLATE (dist/corej-rest-dist). There, the dist
+    module was a separate packaging=pom project and the application arrived as a
+    dependency, so the descriptors set useProjectArtifact=false. This repository is a
+    SINGLE MODULE — the root pom IS the application — so the lib/ dependencySet must
+    set useProjectArtifact=TRUE or the bundle ships every dependency and no
+    application.
+-->
+<assembly xmlns="http://maven.apache.org/ASSEMBLY/2.2.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/ASSEMBLY/2.2.0 http://maven.apache.org/xsd/assembly-2.2.0.xsd">
+
+    <id>dist</id>
+    <formats>
+        <!-- zip: the release asset, matched by the release job's target/*-<version>.zip glob.
+             dir: the same tree exploded, so a smoke test (or a container build) can run it
+             without unzipping. -->
+        <format>zip</format>
+        <format>dir</format>
+    </formats>
+
+    <!-- true: unzipping produces ONE directory rather than spraying ~70 jars, a lib/
+         and three store directories into the operator's CWD. -->
+    <includeBaseDirectory>true</includeBaseDirectory>
+    <baseDirectory>cumba-oss-corej-rest-${project.version}</baseDirectory>
+
+    <dependencySets>
+
+        <!--
+            The launcher, at the bundle root, with its version stripped.
+
+            Scope is `provided` because that is how the dependency is declared: the
+            launcher is supplied BY the bundle and must never reach the application's
+            own runtime classpath. A dependencySet defaults to runtime scope, which
+            would not match it.
+        -->
+        <dependencySet>
+            <outputDirectory>/</outputDirectory>
+            <useProjectArtifact>false</useProjectArtifact>
+            <useTransitiveDependencies>false</useTransitiveDependencies>
+            <scope>provided</scope>
+            <includes>
+                <include>net.cumba:cumba-oss-bootstrap</include>
+            </includes>
+            <outputFileNameMapping>cumba-oss-corej-rest.jar</outputFileNameMapping>
+        </dependencySet>
+
+        <!--
+            The application jar plus every runtime/transitive dependency, flat under
+            lib/. The .conf's `${bootstrap.dir}/lib/*.jar` glob is what turns this into
+            a classpath.
+        -->
+        <dependencySet>
+            <outputDirectory>lib</outputDirectory>
+            <useProjectArtifact>true</useProjectArtifact>
+            <useTransitiveDependencies>true</useTransitiveDependencies>
+            <scope>runtime</scope>
+        </dependencySet>
+
+    </dependencySets>
+
+    <files>
+        <file>
+            <source>src/main/dist/cumba-oss-corej-rest.conf</source>
+            <outputDirectory>/</outputDirectory>
+        </file>
+        <file>
+            <source>src/main/dist/run.sh</source>
+            <outputDirectory>/</outputDirectory>
+            <!-- Explicit: the zip format does not carry the working tree's mode bits. -->
+            <fileMode>0755</fileMode>
+        </file>
+        <file>
+            <source>src/main/dist/run.bat</source>
+            <outputDirectory>/</outputDirectory>
+        </file>
+    </files>
+
+    <fileSets>
+        <!--
+            The three on-disk stores the engine resolves for itself, shipped EMPTY apart
+            from a README that says what goes in them and where to get it.
+
+            ⚠ They are shipped rather than omitted because the .conf configures all
+            three unconditionally, and "configured but missing" is a hard error for two
+            of them: the dictionary store throws when a validation run sets up (not at
+            process startup — the service still starts), and the Define-XML corpus
+            throws on every conformance run. Only rules/ treats missing and empty alike.
+            On top of that, an existing empty directory is what makes the "put the corpus
+            here" instruction land somewhere visible in the unzipped bundle. Same for config/: an operator has to be able
+            to see that the override file exists before they need it.
+        -->
+        <!--
+            External Spring configuration. `spring.config.additional-location` in the
+            .conf points at this directory, so application.yaml here overrides the copy
+            packaged in the jar without restating it.
+        -->
+        <fileSet>
+            <directory>src/main/dist/config</directory>
+            <outputDirectory>config</outputDirectory>
+        </fileSet>
+
+        <fileSet>
+            <directory>src/main/dist/rules</directory>
+            <outputDirectory>rules</outputDirectory>
+        </fileSet>
+        <fileSet>
+            <directory>src/main/dist/rules-define</directory>
+            <outputDirectory>rules-define</outputDirectory>
+        </fileSet>
+        <fileSet>
+            <directory>src/main/dist/dictionaries</directory>
+            <outputDirectory>dictionaries</outputDirectory>
+        </fileSet>
+    </fileSets>
+
+</assembly>

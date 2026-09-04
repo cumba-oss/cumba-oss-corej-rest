@@ -20,6 +20,18 @@
 # Maven
 **/target/
 
+# Validation reports written into the working directory by the CLI / by tests.
+# ⚠ The engine writes a per-rule runtime CSV beside the report, and the test
+# cleanup only removed CORE-Report-*.json — so these accumulated untracked in the
+# repository root and a `git add -A` would have committed them.
+# ⚠ Anchored with a leading slash, like the other root-only rules in this file.
+# Unanchored they would also swallow a golden-file fixture such as
+# src/test/resources/.../CORE-Report-expected.json — silently, because `git add -A`
+# does not warn about an ignored path.
+/CORE-Report-*.json
+/CORE-Report-*.runtime.csv
+/CORE-Report-*.xlsx
+
 # Pitest incremental-analysis history files (generated; cached by CI)
 /.pitest-history/
 

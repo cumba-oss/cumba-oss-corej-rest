@@ -38,13 +38,18 @@ The libraries this service consumes *are* on Central, released separately on the
 
 ## Releases
 
-Tagging `vX.Y.Z` builds, signs and attaches two files to the release, on both the GitHub and the
-Gitea mirror:
+Tagging `vX.Y.Z` builds, signs and attaches **four** files to the release, on both the GitHub and
+the Gitea mirror:
 
 ```
-cumba-oss-corej-rest-<version>.jar
+cumba-oss-corej-rest-<version>.zip        ← the runnable distribution
+cumba-oss-corej-rest-<version>.zip.asc
+cumba-oss-corej-rest-<version>.jar        ← the plain artifact, also on Nexus
 cumba-oss-corej-rest-<version>.jar.asc
 ```
+
+⭐ **The zip is what you run** (§ Running). The jar is kept for consumers who assemble their own
+classpath; on its own it is not runnable.
 
 The two releases are cut independently from the same tag by `.github/workflows/ci.yml` and
 `.gitea/workflows/main.yml`; the Gitea run additionally deploys to the internal Nexus. Nothing
@@ -58,21 +63,24 @@ assets.
 
 ### Verifying a release asset
 
-Each jar is signed with the same GPG key as the project's Maven Central artifacts — one
-trust root, not two. Nothing here reaches Central, so the release asset is the **only**
-delivery, and a release asset **can be replaced in place** by anyone with write access:
-unlike an immutable Central artifact, the signature is the only thing standing between you
-and a swapped jar.
+**Every asset is signed** — the zip as well as the jar — with the same GPG key as the project's
+Maven Central artifacts, one trust root rather than two. Nothing here reaches Central, so the
+release asset is the **only** delivery, and a release asset **can be replaced in place** by anyone
+with write access: unlike an immutable Central artifact, the signature is the only thing standing
+between you and a swapped file.
+
+⚠ Verify the asset you actually intend to run. For most people that is the **zip**:
 
 ```bash
 curl -sLO <asset-url> && curl -sLO <asset-url>.asc
-gpg --verify cumba-oss-corej-rest-<version>.jar.asc cumba-oss-corej-rest-<version>.jar
+gpg --verify cumba-oss-corej-rest-<version>.zip.asc cumba-oss-corej-rest-<version>.zip
+# and the same two lines with .jar, if you are consuming the jar
 ```
 
 Key fingerprint: `AE5AA7685BED3FC5DF4AE8DD7727EF25F931AF6B`
 
-⚠ **Release assets are mutable**, unlike Central artifacts. The signature proves a jar is
-authentic; **your pinned hash proves *which* authentic jar you adopted.** Record both, and
+⚠ **Release assets are mutable**, unlike Central artifacts. The signature proves an asset is
+authentic; **your pinned hash proves *which* authentic asset you adopted.** Record both, and
 don't assume re-downloading a tag returns the same bytes.
 
 ## Build
@@ -116,14 +124,49 @@ deploy and the release.
 The Spring Boot entry point is `net.cumba.corej.rest.CorejRestApplication`. It serves on port
 `8080` by default (`server.port` in `src/main/resources/application.yaml`).
 
-⛔ **The build does not produce a runnable jar.** `spring-boot:repackage` is not bound in the
-default build, the manifest carries no `Main-Class`, and no dependencies are staged beside the
-jar — `target/cumba-oss-corej-rest-<version>.jar` is a **thin** jar, and `java -jar` on it (or on
-the release asset) fails. In the monorepo the runnable bundle came from the `dist/corej-rest-dist`
-assembly module, which did not come across the repository split, and nothing has replaced it yet.
-Until it does, a deployment has to supply the classpath itself.
+### From a release — the distribution zip
 
-From a checkout, run it through the Maven plugin:
+Every release carries **`cumba-oss-corej-rest-<version>.zip`**, a self-contained runnable
+bundle. Download it (and its `.asc`, see *Verifying a release asset*), unzip, run:
+
+```bash
+unzip cumba-oss-corej-rest-<version>.zip
+cd cumba-oss-corej-rest-<version>
+JAVA_OPTS=-Xmx8g ./run.sh          # run.bat on Windows
+```
+
+```
+cumba-oss-corej-rest-<version>/
+├── cumba-oss-corej-rest.jar     the cumba-oss-bootstrap launcher
+├── cumba-oss-corej-rest.conf    launcher + JVM configuration
+├── run.sh   run.bat
+├── config/application.yaml      external Spring configuration (overrides)
+├── rules/  rules-define/  dictionaries/    ship empty; each has a README
+└── lib/                         the application jar and every dependency
+```
+
+The bundle is **relocatable** — put it anywhere and start `run.sh` by any path, from any working
+directory. `JAVA_OPTS` goes to the JVM; arguments go to Spring Boot
+(`./run.sh --server.port=9090`).
+
+`cumba-oss-corej-rest.jar` is not the application: it is
+[`cumba-oss-bootstrap`](https://github.com/cumba-oss/cumba-oss-commons), a dependency-free
+launcher that reads the sidecar `.conf` beside it, applies its `[properties]` as system
+properties, assembles the `lib/` classpath and invokes `CorejRestApplication`. ⚠ **The jar and
+the `.conf` must keep the same basename** — the lookup is "strip `.jar`, append `.conf`, look
+beside me". Rename one, rename both, or pass `-Dbootstrap.config=<path>`.
+
+There are **two configuration files, and they are not interchangeable**:
+
+| File | Read by | Holds |
+|---|---|---|
+| `cumba-oss-corej-rest.conf` | the launcher | the classpath, JVM system properties, and the engine's `corej.rules.dir` / `corej.define.rules.dir` / `corej.dictionariesDir` |
+| `config/application.yaml` | Spring | `server.port`, `corej.*` yaml keys, springdoc, multipart limits — overriding the copy packaged in the jar |
+
+⛔ Putting `corej.rules.dir` in `config/application.yaml` binds **nothing** and fails silently
+(see below). It belongs in the `.conf`, where the bundle already sets it.
+
+### From a checkout
 
 ```bash
 mvn -B org.springframework.boot:spring-boot-maven-plugin:4.1.1:run
@@ -133,6 +176,20 @@ mvn -B org.springframework.boot:spring-boot-maven-plugin:4.1.1:run
 the plugin is declared only inside the `generate-openapi` profile, so prefix resolution fails with
 `No plugin found for prefix 'spring-boot' in the current project` (measured). `4.1.1` is the
 `dependency.spring-boot.version` pinned in the pom.
+
+`mvn package` also builds the distribution zip at `target/cumba-oss-corej-rest-<version>.zip`,
+and the same tree exploded at
+`target/cumba-oss-corej-rest-<version>/cumba-oss-corej-rest-<version>/` for `src/test/smoke.sh`.
+
+⚠ **Two levels, not one.** The assembly's `dir` format nests its `<baseDirectory>` inside the
+execution's `<finalName>`, so the bundle root is the doubled path above — pointing the smoke
+script at the outer directory reports `bundle is missing run.sh` on a perfectly good build.
+
+⚠ **The plain jar is still not runnable, by design.** `spring-boot:repackage` is deliberately
+not bound: `target/cumba-oss-corej-rest-<version>.jar` carries no `Main-Class` and no
+dependencies, and `java -jar` on it fails. It remains the artifact published to Nexus and is
+still attached to the release for consumers who manage their own classpath — the **zip** is what
+you run.
 
 ### API surface
 
@@ -208,6 +265,17 @@ vendored here — it is released separately, as signed archives, from
 Spring, from `COREJ_RULES_DIR`, then the `corej.rules.dir` system property, then `./rules`.
 Putting `corej.rules.dir` in `application.yaml` binds nothing and fails silently — the service
 starts and `/api/meta/run-options` simply offers no rule packages.
+
+⭐ **The distribution zip already handles this.** `cumba-oss-corej-rest.conf` sets each of the
+three directories to `${env:COREJ_…:-${sys:<property>:-${bootstrap.dir}/<dir>}}`, giving
+
+    COREJ_* environment  >  -D system property  >  the bundle's own directory
+
+— the engine's documented precedence, but resolving against the bundle instead of the working
+directory of whatever supervises the service. ⚠ The `${sys:…}` level is not cosmetic: the
+launcher applies `[properties]` with an unconditional `System.setProperty`, so a two-level form
+would *overwrite* a `-D` the operator passed. Drop the corpus into the bundle's `rules/` (contents, not the archive's
+top-level directory) or point `COREJ_RULES_DIR` elsewhere, and restart.
 
 ## Serving the SPA from this jar (`bundle-web`)
 

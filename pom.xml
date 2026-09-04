@@ -129,6 +129,7 @@
         <plugin.license-maven-plugin.version>2.7.1</plugin.license-maven-plugin.version>
         <plugin.maven-compiler-plugin.version>3.15.0</plugin.maven-compiler-plugin.version>
         <plugin.maven-dependency-plugin.version>3.11.0</plugin.maven-dependency-plugin.version>
+        <plugin.maven-assembly-plugin.version>3.8.0</plugin.maven-assembly-plugin.version>
         <plugin.maven-jar-plugin.version>3.5.1</plugin.maven-jar-plugin.version>
         <plugin.maven-clean-plugin.version>3.5.0</plugin.maven-clean-plugin.version>
         <plugin.maven-install-plugin.version>3.1.4</plugin.maven-install-plugin.version>
@@ -1368,6 +1369,7 @@
             <!-- Upstream cumba-oss-commons modules (released separately). -->
             <dependency><groupId>net.cumba</groupId><artifactId>cumba-oss-cdisc-library</artifactId><version>${dependency.cumba-oss-commons.version}</version></dependency>
             <dependency><groupId>net.cumba</groupId><artifactId>cumba-oss-web-api</artifactId><version>${dependency.cumba-oss-commons.version}</version></dependency>
+            <dependency><groupId>net.cumba</groupId><artifactId>cumba-oss-bootstrap</artifactId><version>${dependency.cumba-oss-commons.version}</version></dependency>
 
             <!-- Upstream cumba-oss-datatable modules (released separately). -->
             <dependency><groupId>net.cumba</groupId><artifactId>cumba-oss-datatable</artifactId><version>${dependency.cumba-oss-datatable.version}</version></dependency>
@@ -1668,6 +1670,24 @@
         <dependency>
             <groupId>net.cumba</groupId>
             <artifactId>cumba-oss-web-api</artifactId>
+        </dependency>
+
+        <!--
+            The cumba-oss-bootstrap launcher. It is NOT used by any code in this
+            module — it is the outer jar of the release distribution, picked up by
+            src/assembly/dist.xml and written to the bundle root as
+            cumba-oss-corej-rest.jar.
+
+            ⭐ Scope `provided` is deliberate: the launcher must not appear on the
+            application's own runtime classpath (it loads the application, not the
+            other way round), and provided keeps it out of the bundle's lib/. The
+            assembly's first dependencySet asks for <scope>provided</scope>
+            precisely so it can still see it.
+        -->
+        <dependency>
+            <groupId>net.cumba</groupId>
+            <artifactId>cumba-oss-bootstrap</artifactId>
+            <scope>provided</scope>
         </dependency>
 
         <dependency>
@@ -2289,6 +2309,76 @@
                          starter-parent enables this by default, but we inherit cumba-oss-corej-rest-parent). -->
                     <parameters>true</parameters>
                 </configuration>
+            </plugin>
+
+            <!--
+                ⛔ DECLARED ONLY TO PIN EXECUTION ORDER — and it is REQUIRED, not
+                defensive. Configuration lives in pluginManagement; this bare element
+                adds no executions of its own, it only fixes where the lifecycle's
+                default-jar execution lands.
+
+                Maven appends lifecycle-injected plugins AFTER everything declared in
+                <build><plugins>. Measured with `mvn help:effective-pom`: an undeclared
+                plugin lands in the trailing block with clean/resources/install/deploy.
+                So without this element default-jar would run deterministically AFTER
+                make-dist, and the assembly's useProjectArtifact=true would package a
+                lib/ with no application jar in it — green build, unrunnable bundle.
+
+                With it, the effective order is
+                    maven-jar-plugin[default-jar:package] -> maven-assembly-plugin[make-dist:package]
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+            </plugin>
+
+            <!--
+                The runnable release distribution: src/assembly/dist.xml bundles the
+                cumba-oss-bootstrap launcher, this project's jar, every runtime
+                dependency, an external config/ directory and a sidecar .conf into one
+                zip.
+
+                ⭐ This is what replaces `spring-boot:repackage`, which is NOT bound in
+                this build — the plain jar carries no Main-Class and cannot be started.
+                See README.md § Running.
+
+                ⚠ Must stay declared AFTER maven-jar-plugin above; same-phase executions
+                run in declaration order. (Same trap as corej-web, where the frontend
+                build has to be declared before the assembly.)
+
+                appendAssemblyId=false plus an explicit finalName so the release job's
+                `target/*-<version>.zip` glob matches a readable
+                cumba-oss-corej-rest-<version>.zip rather than a -dist suffixed name.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <version>${plugin.maven-assembly-plugin.version}</version>
+                <configuration>
+                    <appendAssemblyId>false</appendAssemblyId>
+                    <!--
+                        ⛔ DO NOT ATTACH. The assembly plugin attaches by default, which
+                        would make the zip a project artifact and push 55-75 MB to Nexus
+                        on every `mvn deploy` — and this repository deploys SNAPSHOTs from
+                        every push to main, not just on tags. The zip is delivered as a
+                        GitHub/Gitea release asset, never through Maven, so nothing needs
+                        it in a repository.
+                    -->
+                    <attach>false</attach>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>make-dist</id>
+                        <phase>package</phase>
+                        <goals><goal>single</goal></goals>
+                        <configuration>
+                            <finalName>cumba-oss-corej-rest-${project.version}</finalName>
+                            <descriptors>
+                                <descriptor>src/assembly/dist.xml</descriptor>
+                            </descriptors>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
 

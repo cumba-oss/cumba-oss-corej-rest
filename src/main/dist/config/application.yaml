@@ -1,0 +1,43 @@
+# External Spring configuration for this bundle.
+#
+# The launcher points Spring at this directory with
+# `spring.config.additional-location` (see cumba-oss-corej-rest.conf), so
+# everything here OVERRIDES the application.yaml packaged inside the jar and
+# leaves the rest of it in place. Uncomment only what you need.
+#
+# ⛔ The rule-corpus and dictionary directories are NOT configurable here. They are
+# resolved by the engine, not by Spring, so a `corej.rules.dir` key in this file
+# binds nothing and fails silently — the service starts and /api/meta/run-options
+# simply offers no rule packages. Set them in cumba-oss-corej-rest.conf, which is
+# where the bundle already configures them.
+#
+# Restart the service after editing.
+
+#server:
+#  port: 8080
+
+#spring:
+#  servlet:
+#    multipart:
+#      max-file-size: 512MB
+#      max-request-size: 512MB
+
+#corej:
+#  # Persistent staging and report directories. When both are set (and distinct),
+#  # sessions and runs are rebuilt from their on-disk manifests at startup and so
+#  # survive a restart. Unset means a fresh OS temp directory per run, removed on
+#  # shutdown.
+#  sessions:
+#    dir: /var/lib/corej/sessions
+#  reports:
+#    dir: /var/lib/corej/reports
+#  runs:
+#    # Concurrently-executing check runs across ALL sessions; the rest queue.
+#    max-parallel: 2
+
+# Production hardening: the API documentation endpoints are on by default.
+#springdoc:
+#  api-docs:
+#    enabled: false
+#  swagger-ui:
+#    enabled: false

@@ -206,7 +206,12 @@ jobs:
           # starts, and actions/cache fails a save whose path is missing.
           mkdir -p ~/.pitest-history
           rc=0
+          # ⚠ -Dassembly.skipAssembly: this pass does not need the 55-75 MB distribution
+          #    zip, and the assembly would rebuild it (and its exploded copy) from
+          #    scratch. No pass runs `clean`, so the bundle built by the install pass
+          #    above is still in target/ for the smoke-test and upload steps below.
           mvn -B -P Pitest verify -DskipTests -DskipPmd -DskipSpotbugs -Dspotless.check=true \
+              -Dassembly.skipAssembly=true \
               -Dpitest.enabled=true -Dpitest.failOnError=true \
               -Drevision=${{ steps.ver.outputs.version }} | tee maven-pitest.log || rc=$?
           echo "$rc" > pitest.rc
@@ -236,25 +241,60 @@ jobs:
           fi
           echo "Pitest mutation gate passed."
 
-      # Hand the jars to the release job. Short-lived hand-off -> low retention.
+      # ⛔ PROVE THE BUNDLE RUNS BEFORE ATTACHING IT TO A RELEASE.
+      #
+      # Before the bundle existed the release asset was the thin application jar: no
+      # Main-Class, no dependencies, `java -jar` on it simply fails — and nothing in
+      # `mvn verify` noticed, because nothing ever tried to start it. This step starts
+      # the assembled service and talks to it. It is also the regression test for the
+      # jspecify scope fix: `provided` is excluded from every runtime classpath, so a
+      # relapse kills the ApplicationContext here rather than in production.
+      #
+      # ⚠ The exploded `dir` format nests the assembly's <baseDirectory> inside
+      # <finalName>, hence the doubled path below.
+      - name: Smoke-test the distribution bundle
+        run: |
+          set -eo pipefail
+          bundle="target/cumba-oss-corej-rest-${{ steps.ver.outputs.version }}/cumba-oss-corej-rest-${{ steps.ver.outputs.version }}"
+          ls -la "$bundle"
+          bash src/test/smoke.sh "$bundle"
+
+          # ⛔ The upload below globs BOTH .jar and .zip, and `if-no-files-found: error`
+          #    fires only when NOTHING matches — so a vanished zip would ship a
+          #    jar-only release silently, which is the exact failure this bundle
+          #    exists to remove. Assert it here, where the message can say so.
+          zip="target/cumba-oss-corej-rest-${{ steps.ver.outputs.version }}.zip"
+          [ -f "$zip" ] || { echo "::error::$zip was not built — the release would carry only the unrunnable jar"; exit 1; }
+          ls -l "$zip"
+
+      # Hand the release assets to the release job. Short-lived hand-off -> low retention.
       #
       # ⚠ The glob is VERSION-SCOPED, not `*.jar`. No pass runs `clean`, so on a
       # reused workspace target/ can still hold jars from an earlier build at a
       # different version — a bare `*.jar` would attach those to the release
       # alongside the real ones. Measured: a workspace that had built
       # 0.1.0-SNAPSHOT and then 9.9.9 matched 8 jars for 4 modules.
-      - name: Upload release jars
+      - name: Upload release assets
         if: startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-artifact@v7
         with:
-          name: release-jars
+          name: release-archives
           # ⚠ target/, not clients/*/target/ — single module now, and
           #   upload-artifact only WARNS on a no-match.
-          path: target/*-${{ steps.ver.outputs.version }}.jar
-          # ⚠ clients/, not lib/ — this repo's modules live under clients/. The
-          #    scaffold's lib/ glob matched NOTHING here, and because these modules
-          #    are not published to Central the GitHub release is the ONLY delivery:
-          #    a silent no-match ships a release with no assets. Hence error, below.
+          #
+          # ⭐ BOTH extensions. The .zip is the RUNNABLE distribution and is what a
+          #   consumer actually wants; the .jar is kept because it is the same artifact
+          #   that goes to Nexus and some consumers put it on their own classpath.
+          #   Attaching only the jar is what made every release asset unrunnable.
+          path: |
+            target/*-${{ steps.ver.outputs.version }}.jar
+            target/*-${{ steps.ver.outputs.version }}.zip
+          # ⚠ if-no-files-found: error, below, because these artefacts are NOT
+          #    published to Central — the forge release is the ONLY delivery, so a
+          #    silent no-match would ship a release with no assets at all. (It cannot
+          #    catch a MISSING ZIP once both globs are listed: it fires only when
+          #    nothing matches. That is what the zip assertion in the smoke step is
+          #    for.)
           if-no-files-found: error
           retention-days: 2
 
@@ -294,11 +334,11 @@ jobs:
       # Overrides the workflow-level `contents: read`; creating a release writes.
       contents: write
     steps:
-      - name: Download release jars
+      - name: Download release assets
         uses: actions/download-artifact@v8
         with:
-          name: release-jars
-          path: release-jars
+          name: release-archives
+          path: release-archives
 
       # ⛔ NORMALISE THE LAYOUT — do not guess it.
       #
@@ -309,17 +349,17 @@ jobs:
       #
       # "Create GitHub Release" below uses `find` and is immune, but the signing loop
       # is not — and both must agree on the shape. Flatten once; both can then assume it.
-      - name: Flatten downloaded jars
+      - name: Flatten downloaded assets
         run: |
           set -eo pipefail
           echo "as downloaded:"
-          find release-jars -type f | sort
+          find release-archives -type f | sort
           while IFS= read -r f; do
-              [ "$(dirname "$f")" = "release-jars" ] || mv -v "$f" release-jars/
-          done < <(find release-jars -type f -name '*.jar')
-          find release-jars -mindepth 1 -type d -empty -delete
+              [ "$(dirname "$f")" = "release-archives" ] || mv -v "$f" release-archives/
+          done < <(find release-archives -type f \( -name '*.jar' -o -name '*.zip' \))
+          find release-archives -mindepth 1 -type d -empty -delete
           echo "flattened:"
-          find release-jars -type f | sort
+          find release-archives -type f | sort
 
       # ⭐ SIGN EVERY JAR — the reason is STRONGER here than on Maven Central.
       #
@@ -351,18 +391,29 @@ jobs:
           printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import
           gpg --list-secret-keys --keyid-format=long
 
-      - name: Sign release jars
+      - name: Sign release assets
         env:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           set -eo pipefail
           shopt -s nullglob
-          jars=(release-jars/*.jar)
+          # ⚠ Both extensions, and the zip matters MORE than the jar: it is the
+          #   runnable artefact, so it is the one worth tampering with.
+          jars=(release-archives/*.jar)
+          zips=(release-archives/*.zip)
+          # ⚠ Each kind checked SEPARATELY. A combined "is the list empty" test passes
+          #   when the runnable zip is missing and only the jar survived — the silent
+          #   half-release this whole change exists to prevent.
           if [ ${#jars[@]} -eq 0 ]; then
-              echo "no jars to sign — the release would carry no content" >&2
+              echo "no jar to sign — the release would be incomplete" >&2
               exit 1
           fi
-          for f in "${jars[@]}"; do
+          if [ ${#zips[@]} -eq 0 ]; then
+              echo "no distribution zip to sign — the release would carry only the unrunnable jar" >&2
+              exit 1
+          fi
+          assets=("${jars[@]}" "${zips[@]}")
+          for f in "${assets[@]}"; do
               gpg --batch --yes --pinentry-mode loopback \
                   --passphrase "$GPG_PASSPHRASE" \
                   --armor --detach-sign "$f"
@@ -389,9 +440,9 @@ jobs:
         run: |
           set -eo pipefail
           echo "attaching:"
-          find release-jars \( -name '*.jar' -o -name '*.asc' \) | sort
+          find release-archives \( -name '*.jar' -o -name '*.zip' -o -name '*.asc' \) | sort
           gh release create "${GITHUB_REF_NAME}" \
               --title "Cumba OSS coreJ REST ${{ needs.build.outputs.version }}" \
               --generate-notes \
               --verify-tag \
-              $(find release-jars \( -name '*.jar' -o -name '*.asc' \) | sort)
+              $(find release-archives \( -name '*.jar' -o -name '*.zip' -o -name '*.asc' \) | sort)
