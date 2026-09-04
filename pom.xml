@@ -262,6 +262,21 @@
         <pitest.failOnError>false</pitest.failOnError>
 
         <!--
+            Pitest exclusion properties, consumed by <excludedTestClasses> /
+            <excludedClasses> in the Pitest profile below. Comma-separated, empty
+            here so they always resolve; modules override them.
+
+            ⚠ Without that wiring these do nothing at all. Measured 2026-09-03 in
+            the internal cumba-core-engine, where both were unwired: a module
+            reported line coverage 56% (1187/2102) and failed its gate, while the
+            same 1187 covered lines became 95% (1187/1253) once <excludedClasses>
+            was honoured — the untested CLIs the author had already excluded were
+            inflating the denominator.
+        -->
+        <pitest.excludedTestClasses/>
+        <pitest.excludedClasses/>
+
+        <!--
             Deploy target for the `deploy-nexus` profile. The URLs default to
             EMPTY on purpose: no internal hostname belongs in a public repo, and
             an empty value makes a fork's `mvn deploy` fail loudly rather than
@@ -626,9 +641,8 @@
                                     notices is not a meaningful mutation signal, so nothing
                                     of value is lost by excluding it.
                                 -->
-                                <excludedTestClasses>
-                                    <param>net.cumba.corej.core.exec.JoinCacheConcurrencyTest</param>
-                                </excludedTestClasses>
+                                <excludedTestClasses>${pitest.excludedTestClasses}</excludedTestClasses>
+                                <excludedClasses>${pitest.excludedClasses}</excludedClasses>
                                 <!--
                                     Pin pitest's own `skipTests` to false. The plugin binds
                                     it to ${skipTests} by default, so CI's dedicated
