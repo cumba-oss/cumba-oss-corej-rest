@@ -18,6 +18,25 @@ assets.
 The libraries these clients consume *are* on Central, released separately:
 `cumba-oss-commons`, `cumba-oss-formats`, `cumba-oss-datatable` and `cumba-oss-corej`.
 
+### Verifying a release asset
+
+Each jar is signed with the same GPG key as the project's Maven Central artifacts — one
+trust root, not two. Nothing here reaches Central, so the release asset is the **only**
+delivery, and a release asset **can be replaced in place** by anyone with write access:
+unlike an immutable Central artifact, the signature is the only thing standing between you
+and a swapped jar.
+
+```bash
+curl -sLO <asset-url> && curl -sLO <asset-url>.asc
+gpg --verify cumba-oss-corej-rest-<version>.jar.asc cumba-oss-corej-rest-<version>.jar
+```
+
+Key fingerprint: `AE5AA7685BED3FC5DF4AE8DD7727EF25F931AF6B`
+
+⚠ **Release assets are mutable**, unlike Central artifacts. The signature proves a jar is
+authentic; **your pinned hash proves *which* authentic jar you adopted.** Record both, and
+don't assume re-downloading a tag returns the same bytes.
+
 ## Build
 
 ```bash

@@ -482,6 +482,15 @@ jobs:
       # node runtime; the bare runner host has none. Reuse the node-bearing
       # build image — heavier than needed, but already pullable, no new dep.
       image: ${{ vars.DOCKER_REGISTRY_HOSTNAME }}/maven-with-nodejs:3.9-eclipse-temurin-25
+    # ⛔ bash, EXPLICITLY. Gitea's act_runner defaults a job's steps to `sh -e`, which is
+    # dash — it has no `pipefail` and no `shopt`, both of which the signing steps below
+    # use. GitHub defaults to bash, so this divergence is invisible in the .github file
+    # and fails ONLY here.
+    #   Measured 2026-09-03, cumba-oss-corej-rules v0.2.1:
+    #   "/var/run/act/workflow/1.sh: 2: set: Illegal option -o pipefail"
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Download release jars
         uses: actions/download-artifact@v3
@@ -489,9 +498,91 @@ jobs:
           name: release-jars
           path: release-jars
 
+      # ⛔ NORMALISE THE LAYOUT — do not guess it.
+      #
+      # act_runner's download-artifact does NOT collapse to the least-common-ancestor the
+      # way GitHub's does. Measured on cumba-oss-corej-rules v0.2.2: the download reported
+      # "Total number of files that will be downloaded: 2" and succeeded, and a flat glob
+      # STILL matched nothing — the files kept their original target/ path inside the
+      # download directory.
+      #
+      # That is why this step exists rather than a cleverer glob: the signing loop and the
+      # release action below each need a glob, they are checked by different code, and a
+      # no-match is silent in one of them. Flattening once here makes both deterministic.
+      # ⚠ The listing is deliberate: if this ever breaks again, the log shows the actual
+      #    layout instead of leaving the next person to infer it.
+      - name: Flatten downloaded jars
+        run: |
+          set -eo pipefail
+          echo "as downloaded:"
+          find release-jars -type f | sort
+          while IFS= read -r f; do
+              [ "$(dirname "$f")" = "release-jars" ] || mv -v "$f" release-jars/
+          done < <(find release-jars -type f -name '*.jar')
+          find release-jars -mindepth 1 -type d -empty -delete
+          echo "flattened:"
+          find release-jars -type f | sort
+
+      # ⭐ Sign every jar with the same key as cumba-oss-corej-rules and -corej-web, so
+      #    consumers have ONE trust root across the suite rather than one per repository.
+      #    The reason is STRONGER here than on Central: these artefacts are NOT published
+      #    to Central, so this release is the only delivery, and a release asset can be
+      #    replaced in place by anyone with write access — the signature is the only
+      #    thing between a consumer and a swapped jar.
+      #    loopback pinentry because a runner has no tty; without it gpg hangs.
+      - name: Import signing key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          set -eo pipefail
+          if ! command -v gpg >/dev/null 2>&1; then
+              echo "::error::gpg is not installed in the build image. Release assets" \
+                   "cannot be signed. Add gnupg to maven-with-nodejs, or install it in" \
+                   "this step. Refusing to publish unsigned assets." >&2
+              exit 1
+          fi
+          # ⚠ This repository has never cut a tag, so GPG_PRIVATE_KEY has never been
+          #    exercised here. An unset secret arrives as the EMPTY STRING, and gpg then
+          #    exits 2 with "gpg: no valid OpenPGP data found" (verified 2026-09-04,
+          #    gpg 2.4.8) — which reads as a MALFORMED key and sends the next reader
+          #    after the key material rather than after an unset secret. Name it here.
+          if [ -z "$GPG_PRIVATE_KEY" ]; then
+              echo "::error::the GPG_PRIVATE_KEY secret is empty or unset in this" \
+                   "repository. Set GPG_PRIVATE_KEY and GPG_PASSPHRASE to the key" \
+                   "cumba-oss-corej-rules already signs with. Refusing to publish" \
+                   "unsigned assets." >&2
+              exit 1
+          fi
+          printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import
+          gpg --list-secret-keys --keyid-format=long
+
+      - name: Sign release jars
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          set -eo pipefail
+          shopt -s nullglob
+          jars=(release-jars/*.jar)
+          if [ ${#jars[@]} -eq 0 ]; then
+              echo "no jars to sign — the release would carry no content" >&2
+              exit 1
+          fi
+          for f in "${jars[@]}"; do
+              gpg --batch --yes --pinentry-mode loopback \
+                  --passphrase "$GPG_PASSPHRASE" \
+                  --armor --detach-sign "$f"
+              gpg --verify "$f.asc" "$f"
+              echo "signed: $f"
+          done
+
       - name: Create release
         uses: actions/gitea-release-action@main
         with:
-          name: "Cumba OSS coreJ ${{ needs.build.outputs.version }}"
+          name: "Cumba OSS coreJ REST ${{ needs.build.outputs.version }}"
+          # ⚠ FLAT, not `**/`. The jar comes from ONE target dir and the flatten step
+          #    above guarantees that shape. A `**/` glob requires ≥ 1 directory, so it
+          #    would match nothing and cut a release with NO ASSETS without failing the
+          #    job — which is exactly what this file did until 2026-09-04.
           files: |
-            release-jars/**/*.jar
+            release-jars/*.jar
+            release-jars/*.asc

@@ -300,6 +300,76 @@ jobs:
           name: release-jars
           path: release-jars
 
+      # ⛔ NORMALISE THE LAYOUT — do not guess it.
+      #
+      # upload-artifact does NOT reliably collapse to the least-common-ancestor, on
+      # EITHER forge. Measured 2026-09-03 on GitHub (cumba-oss-corej-web): upload and
+      # download both SUCCEEDED and the signing step still found nothing, because the
+      # files kept their original target/ path inside the download directory.
+      #
+      # "Create GitHub Release" below uses `find` and is immune, but the signing loop
+      # is not — and both must agree on the shape. Flatten once; both can then assume it.
+      - name: Flatten downloaded jars
+        run: |
+          set -eo pipefail
+          echo "as downloaded:"
+          find release-jars -type f | sort
+          while IFS= read -r f; do
+              [ "$(dirname "$f")" = "release-jars" ] || mv -v "$f" release-jars/
+          done < <(find release-jars -type f -name '*.jar')
+          find release-jars -mindepth 1 -type d -empty -delete
+          echo "flattened:"
+          find release-jars -type f | sort
+
+      # ⭐ SIGN EVERY JAR — the reason is STRONGER here than on Maven Central.
+      #
+      # These artefacts are NOT published to Central, so this release is the only public
+      # delivery. A release asset CAN be replaced in place by anyone with write access,
+      # so the signature is the only thing between a consumer and a silently swapped jar.
+      # Same key as cumba-oss-corej-rules and -corej-web, so consumers have ONE trust
+      # root across the suite, not one per repository.
+      #
+      # ⚠ --batch --yes --pinentry-mode loopback: there is no tty on a runner, and
+      #    without loopback gpg tries to prompt and HANGS the job rather than failing it.
+      - name: Import signing key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          set -eo pipefail
+          # ⚠ This repository has never cut a tag, so GPG_PRIVATE_KEY has never been
+          #    exercised here. An unset secret arrives as the EMPTY STRING, and gpg then
+          #    exits 2 with "gpg: no valid OpenPGP data found" (verified 2026-09-04,
+          #    gpg 2.4.8) — which reads as a MALFORMED key and sends the next reader
+          #    after the key material rather than after an unset secret. Name it here.
+          if [ -z "$GPG_PRIVATE_KEY" ]; then
+              echo "::error::the GPG_PRIVATE_KEY secret is empty or unset in this" \
+                   "repository. Set GPG_PRIVATE_KEY and GPG_PASSPHRASE to the key" \
+                   "cumba-oss-corej-rules already signs with. Refusing to publish" \
+                   "unsigned assets." >&2
+              exit 1
+          fi
+          printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import
+          gpg --list-secret-keys --keyid-format=long
+
+      - name: Sign release jars
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          set -eo pipefail
+          shopt -s nullglob
+          jars=(release-jars/*.jar)
+          if [ ${#jars[@]} -eq 0 ]; then
+              echo "no jars to sign — the release would carry no content" >&2
+              exit 1
+          fi
+          for f in "${jars[@]}"; do
+              gpg --batch --yes --pinentry-mode loopback \
+                  --passphrase "$GPG_PASSPHRASE" \
+                  --armor --detach-sign "$f"
+              gpg --verify "$f.asc" "$f"
+              echo "signed: $f"
+          done
+
       # `gh` is preinstalled on GitHub-hosted runners, so this needs no
       # third-party action — one less dependency to pin and audit in a public
       # repo. --verify-tag refuses to invent a tag that does not exist.
@@ -318,9 +388,10 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -eo pipefail
-          find release-jars -name '*.jar' -print
+          echo "attaching:"
+          find release-jars \( -name '*.jar' -o -name '*.asc' \) | sort
           gh release create "${GITHUB_REF_NAME}" \
-              --title "Cumba OSS coreJ ${{ needs.build.outputs.version }}" \
+              --title "Cumba OSS coreJ REST ${{ needs.build.outputs.version }}" \
               --generate-notes \
               --verify-tag \
-              $(find release-jars -name '*.jar' | sort)
+              $(find release-jars \( -name '*.jar' -o -name '*.asc' \) | sort)
