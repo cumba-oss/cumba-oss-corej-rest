@@ -1471,12 +1471,34 @@
 
             <!-- JSpecify nullability annotations. Declared once in the project-wide
                  <dependencies> block below so every module inherits it (NullAway
-                 needs @Nullable / @NonNull / @NullMarked importable everywhere). -->
+                 needs @Nullable / @NonNull / @NullMarked importable everywhere).
+
+                 ⛔ SCOPE IS `compile`, NOT `provided` — and that is load-bearing HERE in a
+                 way it is not in the library repos. Spring Framework 7 reads JSpecify
+                 annotations REFLECTIVELY at runtime: `org.springframework.core.Nullness`
+                 (`jSpecifyNullness`, reached from `DependencyDescriptor.isRequired` for every
+                 autowired constructor parameter) resolves `org.jspecify.annotations.Nullable`
+                 while the ApplicationContext is being built. `provided` is excluded from every
+                 runtime classpath, so the context died at startup with
+
+                     Caused by: java.lang.ClassNotFoundException: org.jspecify.annotations.Nullable
+                         at org.springframework.core.Nullness.jSpecifyNullness(Nullness.java:154)
+
+                 ⚠ This is not a packaging-mechanism problem and no bundle layout fixes it:
+                 `spring-boot:repackage` also drops `provided`, so a fat jar fails identically.
+                 The 3 KB annotations jar has to be on the runtime classpath.
+
+                 ⚠ Consequence, stated plainly: jspecify becomes a transitive COMPILE
+                 dependency of the published cumba-oss-corej-rest artifact. Nothing here
+                 reaches Maven Central, but this artifact IS deployed to the internal
+                 Nexus, so a downstream consumer does inherit the edge. At 3 KB of
+                 annotations that is the right trade against a service that cannot
+                 start. -->
             <dependency>
                 <groupId>org.jspecify</groupId>
                 <artifactId>jspecify</artifactId>
                 <version>${dependency.jspecify.version}</version>
-                <scope>provided</scope>
+                <scope>compile</scope>
             </dependency>
 
 
@@ -1653,11 +1675,9 @@
             <artifactId>lombok</artifactId>
         </dependency>
 
-        <!-- JSpecify nullability annotations (NullAway). -->
-        <dependency>
-            <groupId>org.jspecify</groupId>
-            <artifactId>jspecify</artifactId>
-        </dependency>
+        <!-- JSpecify: declared once in the project-wide <dependencies> block above
+             (this repository is a single module, so "project-wide" and "this module"
+             are the same list — a second declaration here was a duplicate). -->
 
         <!-- Logging backend is Logback (the Spring Boot default, pulled in transitively by the
              starters). The engine logs via java.lang.System.Logger -> JUL; Boot's jul-to-slf4j
