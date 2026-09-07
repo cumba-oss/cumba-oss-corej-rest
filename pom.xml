@@ -2235,6 +2235,25 @@
                 configuration.
             -->
 
+            <!--
+                Build provenance. pluginManagement above carries the whole
+                configuration (dotGitDirectory, the six includeOnlyProperties,
+                generateGitPropertiesFile); this bare entry is what actually
+                BINDS it into the lifecycle.
+
+                ⚠⚠ Without this entry the plugin never runs and no
+                git.properties is produced anywhere, so a fully configured
+                plugin silently does nothing. That matters more here than in
+                the internal repos: these artifacts are published to Maven
+                CENTRAL, so every release reached third parties carrying no
+                build provenance at all. Found and fixed 2026-09-07, after the
+                same defect surfaced in the internal stack.
+            -->
+            <plugin>
+                <groupId>io.github.git-commit-id</groupId>
+                <artifactId>git-commit-id-maven-plugin</artifactId>
+            </plugin>
+
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
