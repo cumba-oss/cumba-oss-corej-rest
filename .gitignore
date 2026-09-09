@@ -76,3 +76,8 @@ __pycache__/
 # run drops one at a module root. A 39 KB report carrying a /tmp/junit-*
 # path was committed this way on 2026-09-02 and shipped to a public repo.
 **/*.define.json
+
+# Container runtime data: docker-compose.yml bind-mounts ./corej-data at
+# /app/data, where it holds uploaded study files, per-run reports, an installed
+# dictionary set and a seeded CDISC Library API cache. None of that belongs in git.
+/corej-data/

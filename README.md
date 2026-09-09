@@ -298,11 +298,38 @@ something arbitrary. The profile does not change the default build.
 For the cross-origin alternative — a separately hosted SPA — add a CORS `WebMvcConfigurer` bean
 instead of bundling.
 
+## Containers
+
+`Dockerfile`, `docker-compose.yml` and `docker-entrypoint.sh` build and run the service from this
+repository alone:
+
+```sh
+docker compose up -d --build
+docker compose logs -f                 # the startup notices are here
+curl -fsS http://localhost:8080/api/info
+```
+
+The build stage runs one `mvn -B -DskipTests package` and unpacks the dist zip; the runtime stage
+is a JRE over that bundle, running as uid 1000. Compose bind-mounts `./corej-data` at `/app/data`,
+so sessions, reports, the rule corpora, the dictionary store and the CDISC Library API cache all
+stay on the host — `mkdir -p corej-data && sudo chown -R 1000:1000 corej-data` once, first.
+Copy `.env.example` to `.env` to change any of it.
+
+Three things the image deliberately does **not** carry, each announced once at startup rather than
+discovered per run:
+
+- **No SPA — the image is API-only.** `bundle-web` needs a pre-built SPA handed to it via
+  `-Dweb.dist.dir`, and there is nothing here for a container build to inline. `/api` and
+  `/swagger-ui.html` are what it serves.
+- **No rule corpus.** The corpora are released separately by `cumba-oss-corej-rules` and are not
+  Maven dependencies. Unpack the two release assets into `corej-data/rules` and
+  `corej-data/rules-define`.
+- **No dictionary installer.** The installer is the CLI, a separate repository. Run the
+  `cumba-oss-corej-cli` image against the same `./corej-data`, or mount a licensed distribution at
+  `/licensed-dictionaries/<type>`.
+
 ## What is deliberately not here
 
-- **Containers.** The Dockerfiles, Compose files and the `start.sh` launcher were wired to the
-  monorepo layout (`dist/` bundle modules, the web SPA, the rule corpus in a sibling module) and
-  could not build from this repository.
 - **The web SPA.** See `bundle-web` above.
 - **The rule editor.** Not part of the open-source distribution.
 

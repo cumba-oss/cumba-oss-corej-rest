@@ -1,0 +1,20 @@
+# Build context hygiene for Dockerfile. The build stage runs Maven inside the
+# image, so the context needs the sources and the pom — and nothing that Maven
+# produces or that the container writes at run time.
+#
+# ⚠ This repository is flat and builds itself, so it needs its own .dockerignore;
+# there is no repo-root one above it to inherit.
+target/
+.git/
+.github/
+
+# The compose stack's bind mount (docker-compose.yml: ./corej-data:/app/data). It
+# holds uploaded study files, per-run reports, an installed dictionary set and a
+# seeded CDISC Library API cache — easily gigabytes, and never a build input.
+corej-data/
+
+# Editor/IDE and local tooling noise.
+.idea/
+.vscode/
+*.iml
+.flattened-pom.xml
