@@ -302,7 +302,7 @@ instead of bundling.
 
 - **Containers.** The Dockerfiles, Compose files and the `start.sh` launcher were wired to the
   monorepo layout (`dist/` bundle modules, the web SPA, the rule corpus in a sibling module) and
-  could not build from this repository. They are being reworked into their own repository.
+  could not build from this repository.
 - **The web SPA.** See `bundle-web` above.
 - **The rule editor.** Not part of the open-source distribution.
 
