@@ -47,7 +47,8 @@ corej:
   #     enabled: true
   #     repo-uri: https://github.com/cdisc-org/cdisc-rules-engine   # blank = this default
   #     ref:                        # blank = the repository's advertised default branch
-  #     repo-path: resources/cache
+  #     repo-path: resources/cache  # path to the *.pkl files; blank = this default
+  #     archive-url-template:       # blank = the default {repo}/{ref} archive URL
   #     from-dir:                   # seed from a local pickle dir instead of downloading
   #     target-dir:                 # blank = CDISC_API_CACHE, else ~/.cdiscApiCache
   #     overwrite: false            # true replaces entries that already exist
