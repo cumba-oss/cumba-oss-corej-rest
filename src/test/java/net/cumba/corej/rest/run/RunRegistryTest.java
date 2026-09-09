@@ -173,5 +173,10 @@ class RunRegistryTest
         second.reload();
         assertThat(second.get("good")).isNotNull();
         assertThatThrownBy(() -> second.get("bad")).isInstanceOf(RunNotFoundException.class);
+        // F-rest-03: the skip must not be silent. A run whose record is truncated vanishes from
+        // GET /api/checks while its report/log files stay on disk, so the fact that the run list is
+        // incomplete has to be recorded, not merely logged and forgotten.
+        assertThat(second.unreadableRunRecords()).containsExactly("run-bad.json");
+        assertThat(second.isRehydrationComplete()).isTrue();
     }
 }

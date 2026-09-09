@@ -14,6 +14,7 @@ import net.cumba.corej.core.run.StudyValidationParams;
 import net.cumba.corej.core.run.StudyValidationResult;
 import net.cumba.corej.core.run.StudyValidationService;
 import net.cumba.corej.rest.session.Session;
+import net.cumba.corej.rest.session.SessionFilenames;
 import net.cumba.datatable.io.FileInfo;
 import net.cumba.datatable.manager.IDataTableManager;
 import net.cumba.datatable.manager.local.LocalDataTableManager;
@@ -305,9 +306,15 @@ public class StudyValidationCheckRunner implements CheckRunner
         {
             return;
         }
-        if (isBlank(name) || name.indexOf('/') >= 0 || name.indexOf('\\') >= 0)
+        // F-rest-04: one shared definition of "bare file name" (SessionFilenames), the same one
+        // every uploaded name passed through in SessionRegistry. This copy used to check only
+        // blank and the two path separators, so its safety against '..' and a NUL byte was a
+        // property of the registry's exact-match lookup rather than of its own code.
+        String violation = SessionFilenames.violation(name);
+        if (violation != null)
         {
-            throw new BadRunRequestException("'" + field + "' must be a bare file name: " + name);
+            throw new BadRunRequestException(
+                    "'" + field + "' must be a bare file name (" + violation + "): " + name);
         }
         if (!session.hasFile(name))
         {

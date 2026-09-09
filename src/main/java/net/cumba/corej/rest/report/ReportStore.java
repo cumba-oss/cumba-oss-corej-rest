@@ -241,14 +241,14 @@ public class ReportStore
         Map<String, Object> document = mapper.convertValue(tree(runId), Map.class);
         ReportSections sections = ReportSections.fromExportDocument(document);
         // Routed through the report SPI rather than constructing a writer: this module declares
-        // corej-cdisc-report-xlsx as a runtime dependency but imports nothing from it, so an
+        // cumba-oss-corej-report-xlsx as a runtime dependency but imports nothing from it, so an
         // Excel-less deployment degrades to a named error instead of a NoClassDefFoundError
         // (Fix #224).
         ReportFormat xlsx = REPORT_MANAGER.findReportFormat(FORMAT_XLSX);
         if (xlsx == null)
         {
             throw new IllegalStateException("No XLSX report writer on the classpath — add "
-                    + "corej-cdisc-report-xlsx to serve /report.xlsx (run " + runId + ")");
+                    + "cumba-oss-corej-report-xlsx to serve /report.xlsx (run " + runId + ")");
         }
         try (ByteArrayOutputStream out = new ByteArrayOutputStream())
         {
@@ -571,15 +571,48 @@ public class ReportStore
         }
     }
 
+    /**
+     * The outcome of one scan of the reports dir for persisted run records.
+     *
+     * <p>
+     * F-rest-03: the scan is still tolerant of a corrupt record, but it no longer reports a partial
+     * recovery as a complete one. A caller that only reads {@link #records()} sees exactly what the
+     * old {@code List}-returning signature gave it; {@link #unreadable()} and {@link #complete()}
+     * are what make "some runs are missing from this list" observable at all.
+     * </p>
+     *
+     * @param records
+     *            the run records that were read successfully
+     * @param unreadable
+     *            file names of records that were present but corrupt/unreadable, in scan order
+     * @param complete
+     *            {@code false} when the directory scan itself failed, so {@code records} is a
+     *            truncated view of the directory and an unknown number of runs are missing
+     */
+    public record RunRecordScan(List<RunRecord> records, List<String> unreadable, boolean complete)
+    {
 
-    /** All persisted run records under the reports dir; corrupt/unreadable ones are skipped. */
-    public List<RunRecord> loadAllRunRecords()
+        public RunRecordScan
+        {
+            records = List.copyOf(records);
+            unreadable = List.copyOf(unreadable);
+        }
+    }
+
+    /**
+     * All persisted run records under the reports dir. Corrupt/unreadable ones are skipped but
+     * reported (see {@link RunRecordScan}), so a partial rehydration cannot look like a full one.
+     */
+    public RunRecordScan loadAllRunRecords()
     {
         List<RunRecord> out = new ArrayList<>();
+        List<String> unreadable = new ArrayList<>();
         if (!Files.isDirectory(dir))
         {
-            return out;
+            // No reports directory yet: genuinely zero records, not a truncated scan.
+            return new RunRecordScan(List.of(), List.of(), true);
         }
+        boolean complete = true;
         try (var paths = Files.list(dir))
         {
             List<Path> recordFiles = paths.filter(p ->
@@ -598,14 +631,16 @@ public class ReportStore
                 catch (IOException | RuntimeException e)
                 {
                     LOG.warn("Failed to read run record {}", p, e);
+                    unreadable.add(String.valueOf(p.getFileName()));
                 }
             }
         }
         catch (IOException e)
         {
             LOG.warn("Failed to scan {} for run records", dir, e);
+            complete = false;
         }
-        return out;
+        return new RunRecordScan(List.copyOf(out), List.copyOf(unreadable), complete);
     }
 
     // ------------------------------------------------------------------

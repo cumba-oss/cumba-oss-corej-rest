@@ -2,6 +2,7 @@ package net.cumba.corej.rest.run;
 
 import jakarta.annotation.PostConstruct;
 import java.util.Collection;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import net.cumba.corej.rest.config.CorejProperties;
@@ -29,6 +30,15 @@ public class RunRegistry implements SessionRunGuard
 
     private final ConcurrentMap<String, CheckRun> runs = new ConcurrentHashMap<>();
 
+    /**
+     * F-rest-03: what the startup scan could not read. Recorded rather than only logged, so the
+     * fact that the run list is incomplete is queryable and not just a line in yesterday's log.
+     */
+    private volatile List<String> unreadableRunRecords = List.of();
+
+    /** F-rest-03: {@code false} when the startup scan of the reports dir did not complete. */
+    private volatile boolean rehydrationComplete = true;
+
     public RunRegistry(ReportStore reportStore, CorejProperties properties)
     {
         this.reportStore = reportStore;
@@ -50,7 +60,10 @@ public class RunRegistry implements SessionRunGuard
         {
             return;
         }
-        for (RunRecord record : reportStore.loadAllRunRecords())
+        ReportStore.RunRecordScan scan = reportStore.loadAllRunRecords();
+        unreadableRunRecords = scan.unreadable();
+        rehydrationComplete = scan.complete();
+        for (RunRecord record : scan.records())
         {
             CheckRun run = CheckRun.restore(record);
             if (run.status() == RunStatus.SUCCEEDED && !reportStore.hasReport(run.id()))
@@ -71,6 +84,40 @@ public class RunRegistry implements SessionRunGuard
         {
             LOG.info("Rehydrated {} run(s) from persisted records", runs.size());
         }
+        // F-rest-03: a partial recovery must not read as a clean one. Both branches below describe
+        // runs that exist on disk and are absent from GET /api/checks.
+        if (!unreadableRunRecords.isEmpty())
+        {
+            LOG.error(
+                    "Rehydration skipped {} unreadable run record(s): {} - those runs are missing "
+                            + "from the run list although their report artifacts may still be on disk",
+                    unreadableRunRecords.size(), unreadableRunRecords);
+        }
+        if (!rehydrationComplete)
+        {
+            LOG.error("The scan of the run-record directory did not complete: the rehydrated run "
+                    + "list is TRUNCATED and an unknown number of runs are missing from it");
+        }
+    }
+
+
+    /**
+     * File names of run records the startup scan could not read, i.e. runs that exist on disk and
+     * are absent from this registry. Empty after a clean rehydration.
+     */
+    public List<String> unreadableRunRecords()
+    {
+        return List.copyOf(unreadableRunRecords);
+    }
+
+
+    /**
+     * Whether the startup scan of the run-record directory completed. When {@code false} the run
+     * list is a truncated view and the number of missing runs is unknown.
+     */
+    public boolean isRehydrationComplete()
+    {
+        return rehydrationComplete;
     }
 
 

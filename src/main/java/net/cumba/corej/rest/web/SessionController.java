@@ -130,7 +130,7 @@ public class SessionController
             entry = registry.addFile(id, filename, in);
         }
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(new FileUploadResponse(id, entry.filename(), entry.size()));
+                .body(FileUploadResponse.plain(id, entry.filename(), entry.size()));
     }
 
 
@@ -157,9 +157,15 @@ public class SessionController
             @RequestBody UrlUploadRequest request)
         throws IOException
     {
-        Session.FileEntry entry = urlFileFetcher.fetch(id, request.url(), request.filename());
+        UrlFileFetcher.FetchResult fetched = urlFileFetcher.fetch(id, request.url(),
+                request.filename());
+        Session.FileEntry entry = fetched.entry();
+        // F-rest-02: a Define-XML whose referenced datasets could not all be downloaded leaves the
+        // session holding a PARTIAL study. The skip is still best-effort, but the caller is now
+        // told exactly which references are missing instead of only a server-side LOG.warn.
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(new FileUploadResponse(id, entry.filename(), entry.size()));
+                .body(new FileUploadResponse(id, entry.filename(), entry.size(),
+                        fetched.stagedReferences(), fetched.skippedReferences()));
     }
 
 

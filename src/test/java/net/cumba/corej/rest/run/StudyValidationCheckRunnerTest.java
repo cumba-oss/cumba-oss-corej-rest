@@ -743,4 +743,54 @@ class StudyValidationCheckRunnerTest
         assertThat(manager.getSupportedDataTableInfos()).extracting(FileInfo::getFileExtension)
                 .contains("xpt", "sas7bdat", "xls", "xlsx");
     }
+
+
+    /** A request naming only {@code defineXmlFilename}, for the bare-file-name checks below. */
+    private static CheckRunRequest withDefineXml(String name)
+    {
+        return new CheckRunRequest(null, name, null, null, null, null, null, null, null, null, null,
+                null, RULE_PACKAGES);
+    }
+
+
+    /**
+     * F-rest-04. The run-side name check used to be a shorter copy of
+     * {@code SessionRegistry.validateFilename}: blank plus the two path separators, nothing else.
+     * {@code ".."} therefore passed it and was refused one line later by {@code session.hasFile} —
+     * i.e. its safety against a relative segment was a property of the <em>registry's</em>
+     * exact-match lookup, not of its own code. Both now share {@code SessionFilenames}, so the
+     * rejection names the actual violation. This assertion discriminates: under the old code the
+     * message read "references a file not in the session".
+     */
+    @Test
+    void validateRejectsARelativePathSegmentAsAMalformedName()
+    {
+        assertThatThrownBy(() -> StudyValidationCheckRunner.validate(withDefineXml(".."), session))
+                .isInstanceOf(BadRunRequestException.class)
+                .hasMessageContaining("must be a bare file name")
+                .hasMessageContaining("must not be a relative path segment");
+    }
+
+
+    /** The second rule the run-side copy had lost: a NUL byte in the name. */
+    @Test
+    void validateRejectsAFilenameCarryingANulByte()
+    {
+        assertThatThrownBy(() -> StudyValidationCheckRunner
+                .validate(withDefineXml("dm" + (char) 0 + ".xpt"), session))
+                        .isInstanceOf(BadRunRequestException.class)
+                        .hasMessageContaining("must not contain a NUL character");
+    }
+
+
+    /** The rules both copies always shared still reject, with the shared wording. */
+    @Test
+    void validateStillRejectsAPathSeparatorInAName()
+    {
+        assertThatThrownBy(
+                () -> StudyValidationCheckRunner.validate(withDefineXml("sub/dm.xpt"), session))
+                        .isInstanceOf(BadRunRequestException.class)
+                        .hasMessageContaining("must not contain a path separator");
+    }
+
 }

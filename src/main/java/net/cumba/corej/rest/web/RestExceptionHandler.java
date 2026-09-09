@@ -68,9 +68,18 @@ public class RestExceptionHandler
     @ExceptionHandler(UncheckedIOException.class)
     public ProblemDetail handleStorageFailure(UncheckedIOException ex)
     {
-        // e.g. a corrupt/unreadable on-disk findings file — a server-side storage fault.
+        // A server-side storage fault: a report, v2 report, XLSX, execution log, rule-definition
+        // or session-directory operation that could not be completed.
+        //
+        // F-rest-05: report the ACTUAL cause. Every producer in ReportStore throws with a message
+        // naming both the artifact and the run id ("Corrupt report file for run <id>"), and this
+        // handler used to replace all of them with the constant "Failed to read stored findings" —
+        // so a corrupt *report* was reported as a *findings* failure and the run id, the one piece
+        // of information that makes the 500 actionable, was dropped. These messages are written by
+        // this service, carry no user input beyond the run id, and are the diagnosis.
+        String detail = ex.getMessage();
         return ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR,
-                "Failed to read stored findings");
+                detail == null || detail.isBlank() ? "Failed to read stored report data" : detail);
     }
 
 

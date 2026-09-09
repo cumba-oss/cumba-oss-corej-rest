@@ -21,6 +21,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
+import net.cumba.corej.core.report.ReportAssembler;
+import net.cumba.corej.core.report.ValidationReportBuilder;
+import net.cumba.corej.core.run.StudyValidationResult;
 import net.cumba.corej.rest.report.ReportStore;
 import net.cumba.corej.rest.report.RunLog;
 import net.cumba.corej.rest.run.CheckRun;
@@ -28,6 +31,8 @@ import net.cumba.corej.rest.run.CheckRunRequest;
 import net.cumba.corej.rest.run.CheckRunner;
 import net.cumba.corej.rest.run.RunRecord;
 import net.cumba.corej.rest.run.RunRegistry;
+import net.cumba.datatable.report.ValidationReport;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,9 +46,16 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * End-to-end MVC tests for the check + report endpoints. The {@link CheckRunner} is mocked (default
- * null result) so started runs complete promptly as SUCCEEDED; report-backed endpoints are seeded
- * by registering a run and persisting a crafted report JSON via the {@link ReportStore}.
+ * End-to-end MVC tests for the check + report endpoints. The {@link CheckRunner} is mocked to
+ * return an empty-but-real {@link StudyValidationResult} so started runs complete promptly as
+ * SUCCEEDED; report-backed endpoints are seeded by registering a run and persisting a crafted
+ * report JSON via the {@link ReportStore}.
+ *
+ * <p>
+ * F-rest-01: the mock's Mockito default (a {@code null} result) used to be relied on here, which
+ * pinned exactly the behaviour the ruling removes — a null engine result reading as SUCCEEDED. A
+ * null now fails the run, so the stub has to produce a real result to reach the success path.
+ * </p>
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -71,6 +83,25 @@ class CheckApiTest
 
     @MockitoBean
     private CheckRunner runner;
+
+    /** The smallest legitimate engine result: no findings, no dataset summaries. */
+    private static StudyValidationResult emptyResult()
+    {
+        ValidationReport report = new ValidationReportBuilder().build();
+        ReportAssembler.Conformance conformance = ReportAssembler.Conformance.builder()
+                .standard("sdtmig").version("3-4").build();
+        return new StudyValidationResult(report, conformance, List.of(), List.of(), 0, 0.0,
+                List.of());
+    }
+
+
+    @BeforeEach
+    void stubRunner() throws Exception
+    {
+        org.mockito.Mockito.when(runner.run(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(emptyResult());
+    }
+
 
     private static CheckRunRequest minimalRequest()
     {
@@ -785,7 +816,12 @@ class CheckApiTest
         Files.writeString(stagingBase.resolve("reports").resolve("report-" + run.id() + ".json"),
                 "{ corrupt");
         mvc.perform(get("/api/checks/{id}/dataset-groups", run.id()))
-                .andExpect(status().isInternalServerError());
+                .andExpect(status().isInternalServerError())
+                // F-rest-05: the 500 must name the artifact that failed and the run it belongs to.
+                // It used to say "Failed to read stored findings" for every UncheckedIOException —
+                // wrong artifact, and the run id (the only thing that makes it actionable) was
+                // dropped.
+                .andExpect(jsonPath("$.detail").value("Corrupt report file for run " + run.id()));
     }
 
     // ------------------------------------------------------------------
@@ -959,7 +995,7 @@ class CheckApiTest
                     "Loaded {0} template rule(s) from {1}", 7, marker);
             System.getLogger("net.cumba.corej.core.run.StudyValidationService").log(
                     System.Logger.Level.WARNING, "--dataset {0} did not match: {1}", "XX", marker);
-            return null;
+            return emptyResult();
         });
 
         String sid = createSession();

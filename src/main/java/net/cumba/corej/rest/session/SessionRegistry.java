@@ -431,28 +431,11 @@ public class SessionRegistry
 
     private static String validateFilename(String filename)
     {
-        if (filename == null || filename.isBlank())
+        // F-rest-04: the rule itself lives in SessionFilenames, shared with the check-run side.
+        String violation = SessionFilenames.violation(filename);
+        if (violation != null)
         {
-            throw new InvalidFilenameException(String.valueOf(filename), "must not be blank");
-        }
-        if (filename.indexOf('/') >= 0 || filename.indexOf('\\') >= 0)
-        {
-            throw new InvalidFilenameException(filename, "must not contain a path separator");
-        }
-        if (filename.indexOf('\0') >= 0)
-        {
-            throw new InvalidFilenameException(filename, "must not contain a NUL character");
-        }
-        if (".".equals(filename) || "..".equals(filename))
-        {
-            throw new InvalidFilenameException(filename, "must not be a relative path segment");
-        }
-        // Belt-and-suspenders: the name must resolve to a single path element.
-        Path asPath = Path.of(filename);
-        Path fileName = asPath.getFileName();
-        if (asPath.getNameCount() != 1 || fileName == null || !fileName.toString().equals(filename))
-        {
-            throw new InvalidFilenameException(filename, "must be a bare file name");
+            throw new InvalidFilenameException(String.valueOf(filename), violation);
         }
         return filename;
     }

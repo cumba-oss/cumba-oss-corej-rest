@@ -14,6 +14,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.sun.net.httpserver.HttpServer;
+import java.io.OutputStream;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -91,7 +95,72 @@ class SessionApiTest
                 .param("filename", "DM.csv")).andExpect(status().isCreated())
                 .andExpect(jsonPath("$.sessionId").value(id))
                 .andExpect(jsonPath("$.filename").value("DM.csv"))
-                .andExpect(jsonPath("$.size").value(9));
+                .andExpect(jsonPath("$.size").value(9))
+                // F-rest-02: the reference-expansion fields are on the wire for every upload; a
+                // plain file expands nothing, and says so rather than omitting the question.
+                .andExpect(jsonPath("$.stagedReferences", empty()))
+                .andExpect(jsonPath("$.skippedReferences", empty()));
+    }
+
+    /** A Define-XML referencing one reachable and one 404 dataset. */
+    private static final String DEFINE_XML = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <ODM ODMVersion="1.3.2">
+              <Study OID="S1">
+                <MetaDataVersion OID="MDV1" Name="study" DefineVersion="2.0.0">
+                  <ItemGroupDef OID="IG.DM" Name="DM" Domain="DM"><leaf ID="LF.DM" href="dm.xpt"/></ItemGroupDef>
+                  <ItemGroupDef OID="IG.X" Name="X" Domain="X"><leaf ID="LF.X" href="missing.xpt"/></ItemGroupDef>
+                </MetaDataVersion>
+              </Study>
+            </ODM>
+            """;
+
+    private static void serve(HttpServer server, String path, int status, String body)
+    {
+        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+        server.createContext(path, exchange ->
+        {
+            exchange.sendResponseHeaders(status, bytes.length);
+            try (OutputStream os = exchange.getResponseBody())
+            {
+                os.write(bytes);
+            }
+        });
+    }
+
+
+    /**
+     * F-rest-02 at the API boundary. A Define-XML whose referenced datasets cannot all be
+     * downloaded leaves the session holding a PARTIAL study, and the 201 used to describe only the
+     * define itself — indistinguishable from a complete staging, with the skip visible nowhere but
+     * a server-side log line. The response now names what did and did not make it in.
+     */
+    @Test
+    void uploadFromUrlReportsDefineReferencesItCouldNotStage() throws Exception
+    {
+        HttpServer server = HttpServer
+                .create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+        serve(server, "/define.xml", 200, DEFINE_XML);
+        serve(server, "/dm.xpt", 200, "dm-data");
+        serve(server, "/missing.xpt", 404, "nope");
+        server.start();
+        try
+        {
+            String base = "http://127.0.0.1:" + server.getAddress().getPort();
+            String id = createSession();
+            mvc.perform(post("/api/sessions/{id}/files/from-url", id)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"url\":\"" + base + "/define.xml\"}"))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.filename").value("define.xml"))
+                    .andExpect(jsonPath("$.stagedReferences", contains("dm.xpt")))
+                    .andExpect(jsonPath("$.skippedReferences[0].url").value(base + "/missing.xpt"))
+                    .andExpect(jsonPath("$.skippedReferences[0].reason").exists());
+        }
+        finally
+        {
+            server.stop(0);
+        }
     }
 
 

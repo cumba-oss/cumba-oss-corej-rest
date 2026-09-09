@@ -120,21 +120,28 @@ public class RunExecutor
         try
         {
             result = runner.run(run);
+            if (result == null)
+            {
+                // F-rest-01: a null engine result is NOT a success. None of the artifact persists
+                // below can run without a result, so marking SUCCEEDED here produces precisely the
+                // state the next comment forbids: a SUCCEEDED run with a null findingCount whose
+                // every report endpoint answers 409. CheckRunner.run is declared to return a
+                // non-null result, so a null is a broken contract - report it as a failed run.
+                throw new IllegalStateException(
+                        "Check runner returned no validation result for run " + run.id());
+            }
             // Persist the report before flipping to SUCCEEDED, so a persistence failure surfaces as
             // a failed run rather than a SUCCEEDED run with no retrievable report.
-            if (result != null)
-            {
-                ReportSections sections = result.sections();
-                reportStore.persist(run.id(), render(sections, FORMAT_JSON));
-                // The v2 combined-finding report is a primary artifact like v1: persist it before
-                // SUCCEEDED so a write failure fails the run rather than yielding a SUCCEEDED run
-                // whose /report-v2 is unretrievable.
-                reportStore.persistV2(run.id(), render(sections, FORMAT_JSON_V2));
-                // Best-effort pre-render + rule-definition capture: failures are logged and never
-                // change the run outcome (the report is already persisted).
-                persistXlsxQuietly(run);
-                persistRuleDefsQuietly(run, result);
-            }
+            ReportSections sections = result.sections();
+            reportStore.persist(run.id(), render(sections, FORMAT_JSON));
+            // The v2 combined-finding report is a primary artifact like v1: persist it before
+            // SUCCEEDED so a write failure fails the run rather than yielding a SUCCEEDED run
+            // whose /report-v2 is unretrievable.
+            reportStore.persistV2(run.id(), render(sections, FORMAT_JSON_V2));
+            // Best-effort pre-render + rule-definition capture: failures are logged and never
+            // change the run outcome (the report is already persisted).
+            persistXlsxQuietly(run);
+            persistRuleDefsQuietly(run, result);
             run.markSucceeded(result);
         }
         catch (CancelledException _)
@@ -301,7 +308,7 @@ public class RunExecutor
         if (format == null)
         {
             throw new IllegalStateException("No report writer registered for format '" + formatName
-                    + "' — add corej-cdisc-report-json to the classpath");
+                    + "' — add cumba-oss-corej-report-json to the classpath");
         }
         try (ByteArrayOutputStream out = new ByteArrayOutputStream())
         {

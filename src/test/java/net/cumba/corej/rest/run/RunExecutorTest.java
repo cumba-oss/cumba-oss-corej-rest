@@ -8,14 +8,19 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import net.cumba.corej.core.report.ReportAssembler;
+import net.cumba.corej.core.report.ValidationReportBuilder;
 import net.cumba.corej.core.run.CancelledException;
 import net.cumba.corej.core.run.StudyValidationResult;
 import net.cumba.corej.rest.config.CorejProperties;
 import net.cumba.corej.rest.report.ReportStore;
 import net.cumba.corej.rest.session.SessionRegistry;
+import net.cumba.datatable.report.ValidationReport;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -46,9 +51,9 @@ class RunExecutorTest
 
 
     /**
-     * A temp-dir-backed, initialised report store. The fake runner returns a null result so no
-     * report artifacts are written, but the run registry persists run records to it; an initialised
-     * store keeps those writes clean.
+     * A temp-dir-backed, initialised report store. The fake runners write real report artifacts
+     * into it (a run that succeeds must leave a retrievable report) and the run registry persists
+     * run records beside them; an initialised store keeps those writes clean.
      */
     private static ReportStore tempReportStore()
     {
@@ -125,7 +130,7 @@ class RunExecutorTest
             {
                 throw new CancelledException();
             }
-            return null;
+            return emptyResult();
         }
 
 
@@ -251,6 +256,86 @@ class RunExecutorTest
         assertThat(persisted.logLines())
                 .anyMatch(l -> l.startsWith("ERROR ") && l.contains("IllegalStateException"));
         assertThat(persisted.logLines()).anyMatch(l -> l.startsWith("ERROR ") && l.contains("at "));
+    }
+
+
+    /**
+     * The smallest engine result a run can legitimately produce: no findings, no dataset summaries.
+     * Deliberately NOT {@code null} — F-rest-01 defines a null engine result as a failed run, so a
+     * fake that returns null no longer exercises the success path (see
+     * {@link #aNullEngineResultFailsTheRunRatherThanSucceeding()}).
+     */
+    private static StudyValidationResult emptyResult()
+    {
+        ValidationReport report = new ValidationReportBuilder().build();
+        ReportAssembler.Conformance conformance = ReportAssembler.Conformance.builder()
+                .standard("sdtmig").version("3-4").build();
+        return new StudyValidationResult(report, conformance, List.of(), List.of(), 0, 0.0,
+                List.of());
+    }
+
+    /** Runner that returns whatever it is given, including {@code null}. */
+    private static final class FixedRunner implements CheckRunner
+    {
+
+        private final @Nullable StudyValidationResult result;
+
+        FixedRunner(@Nullable StudyValidationResult result)
+        {
+            this.result = result;
+        }
+
+
+        @Override
+        @SuppressWarnings("NullAway")
+        public StudyValidationResult run(CheckRun run)
+        {
+            return result;
+        }
+    }
+
+    /**
+     * F-rest-01. A null engine result skips every artifact persist, so marking the run SUCCEEDED
+     * leaves a run that reports success while /report, /report-v2, /findings and /dataset-groups
+     * all answer 409. It is a failed run and must read as one.
+     */
+    @Test
+    void aNullEngineResultFailsTheRunRatherThanSucceeding()
+    {
+        ReportStore store = tempReportStore();
+        executor = new RunExecutor(propsWithParallelism(1),
+                new RunRegistry(store, new CorejProperties()), new FixedRunner(null), store,
+                unusedSessions(), new RunLogDebugCapture());
+
+        CheckRun run = newRun("rnull");
+        executor.submit(run);
+        executor.awaitTerminal(run, 5);
+
+        assertThat(run.status()).isEqualTo(RunStatus.FAILED);
+        assertThat(run.failureMessage()).contains("no validation result");
+        assertThat(store.hasReport(run.id())).isFalse();
+    }
+
+
+    /**
+     * The counterpart: a real result succeeds AND leaves the report artifacts behind. Without this
+     * the persist block has no coverage in either direction (the four VoidMethodCall mutants on it
+     * were NO_COVERAGE).
+     */
+    @Test
+    void aRealEngineResultSucceedsAndPersistsTheReport()
+    {
+        ReportStore store = tempReportStore();
+        executor = new RunExecutor(propsWithParallelism(1),
+                new RunRegistry(store, new CorejProperties()), new FixedRunner(emptyResult()),
+                store, unusedSessions(), new RunLogDebugCapture());
+
+        CheckRun run = newRun("rok");
+        executor.submit(run);
+        executor.awaitTerminal(run, 5);
+
+        assertThat(run.status()).isEqualTo(RunStatus.SUCCEEDED);
+        assertThat(store.hasReport(run.id())).isTrue();
     }
 
 

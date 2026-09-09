@@ -100,15 +100,36 @@ class UrlFileFetcherDefineTest
     {
         Session session = sessions.create();
 
-        Session.FileEntry entry = fetcher.fetch(session.id(), base + "/define.xml", null);
+        UrlFileFetcher.FetchResult result = fetcher.fetch(session.id(), base + "/define.xml", null);
 
-        assertThat(entry.filename()).isEqualTo("define.xml");
+        assertThat(result.entry().filename()).isEqualTo("define.xml");
         // The referenced datasets that resolved are staged alongside the define.xml...
         assertThat(session.hasFile("define.xml")).isTrue();
         assertThat(session.hasFile("dm.xpt")).isTrue();
         assertThat(session.hasFile("ae.xpt")).isTrue();
         // ...and a reference that 404s is skipped without failing the define staging.
         assertThat(session.hasFile("missing.xpt")).isFalse();
+    }
+
+
+    /**
+     * F-rest-02: the skip is best-effort by design, but it must not be invisible. A session holding
+     * two of the define's three datasets is otherwise indistinguishable from a complete one, and
+     * the check run that follows reports conformance on a partial study.
+     */
+    @Test
+    void aReferenceThatCannotBeDownloadedIsReportedToTheCaller() throws IOException
+    {
+        Session session = sessions.create();
+
+        UrlFileFetcher.FetchResult result = fetcher.fetch(session.id(), base + "/define.xml", null);
+
+        assertThat(result.stagedReferences()).containsExactly("dm.xpt", "ae.xpt");
+        assertThat(result.skippedReferences()).hasSize(1);
+        UrlFileFetcher.SkippedReference skipped = result.skippedReferences().get(0);
+        assertThat(skipped.url()).isEqualTo(base + "/missing.xpt");
+        // The reason names the actual failure, not a generic "skipped".
+        assertThat(skipped.reason()).contains("404");
     }
 
 
@@ -119,12 +140,17 @@ class UrlFileFetcherDefineTest
         sessions.addFile(session.id(), "dm.xpt",
                 new java.io.ByteArrayInputStream("preexisting".getBytes(StandardCharsets.UTF_8)));
 
-        fetcher.fetch(session.id(), base + "/define.xml", null);
+        UrlFileFetcher.FetchResult result = fetcher.fetch(session.id(), base + "/define.xml", null);
 
         // The pre-existing dm.xpt is untouched (not overwritten by the define expansion)...
         assertThat(session.hasFile("dm.xpt")).isTrue();
         // ...and the remaining reference is still staged.
         assertThat(session.hasFile("ae.xpt")).isTrue();
+        // An already-staged reference is NOT a gap: the dataset is in the session, so it is
+        // reported as staged rather than skipped.
+        assertThat(result.stagedReferences()).containsExactly("dm.xpt", "ae.xpt");
+        assertThat(result.skippedReferences()).extracting(UrlFileFetcher.SkippedReference::url)
+                .containsExactly(base + "/missing.xpt");
     }
 
 
@@ -133,12 +159,15 @@ class UrlFileFetcherDefineTest
     {
         Session session = sessions.create();
 
-        Session.FileEntry entry = fetcher.fetch(session.id(), base + "/notdefine.xml",
+        UrlFileFetcher.FetchResult result = fetcher.fetch(session.id(), base + "/notdefine.xml",
                 "define.xml");
 
-        assertThat(entry.filename()).isEqualTo("define.xml");
+        assertThat(result.entry().filename()).isEqualTo("define.xml");
         assertThat(session.hasFile("define.xml")).isTrue();
         assertThat(session.hasFile("dm.xpt")).isFalse();
         assertThat(session.hasFile("ae.xpt")).isFalse();
+        // Nothing was expanded, and nothing is claimed to have been.
+        assertThat(result.stagedReferences()).isEmpty();
+        assertThat(result.skippedReferences()).isEmpty();
     }
 }

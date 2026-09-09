@@ -86,7 +86,7 @@ class UrlFileFetcherTest
     {
         Session session = sessions.create();
 
-        Session.FileEntry entry = fetcher.fetch(session.id(), base + "/data.csv", null);
+        Session.FileEntry entry = fetcher.fetch(session.id(), base + "/data.csv", null).entry();
 
         assertThat(entry.filename()).isEqualTo("data.csv");
         assertThat(entry.size()).isEqualTo(10L);
@@ -99,7 +99,8 @@ class UrlFileFetcherTest
     {
         Session session = sessions.create();
 
-        Session.FileEntry entry = fetcher.fetch(session.id(), base + "/data.csv", "renamed.csv");
+        Session.FileEntry entry = fetcher.fetch(session.id(), base + "/data.csv", "renamed.csv")
+                .entry();
 
         assertThat(entry.filename()).isEqualTo("renamed.csv");
         assertThat(session.hasFile("renamed.csv")).isTrue();
