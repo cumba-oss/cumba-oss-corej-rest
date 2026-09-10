@@ -47,17 +47,25 @@ services:
       #     accepts requests and finds no packages. It says so once at startup. ---
       COREJ_RULES_DIR: /app/data/rules
       COREJ_DEFINE_RULES_DIR: /app/data/rules-define
-      # --- the CDISC Library web-API cache: a DIRECTORY, on the bind mount so it
-      #     outlives a container replacement. Left unset the client falls back to
-      #     ~/.cdiscApiCache, and the image's runtime user has --home-dir /app — an
-      #     image-layer path OUTSIDE this mount, so the cache would be lost on every
-      #     rebuild and cost a full re-seed.
-      #     ⚠ Nothing here fills it. Set COREJ_CACHESEED_ENABLED=true
-      #     (corej.cache-seed.enabled) to have the service seed it once at startup,
-      #     or provision the directory out of band. With an empty cache runs still
-      #     succeed — every library-dependent rule SKIPs, loudly and by name. ---
-      CDISC_API_CACHE: /app/data/api-cache
+      # --- the unified CDISC metadata store: a single zip FILE, on the bind mount
+      #     so it outlives a container replacement. Left unset the engine falls back
+      #     to ~/.cumbaDataBrowser/metadata-cache.zip, and the image's runtime user
+      #     has --home-dir /app — an image-layer path OUTSIDE this mount, so the
+      #     store would be lost on every rebuild and cost a full re-seed. (The
+      #     retired CDISC_API_CACHE that used to sit here is read by nothing; see
+      #     the migration notice in docker-entrypoint.sh.)
+      #     ⚠ Nothing here creates it. Either set COREJ_CACHESEED_ENABLED=true
+      #     (corej.cache-seed.enabled) to have the service seed it once at startup —
+      #     COREJ_CACHESEED_FROMAPI=true plus a CDISC_API_KEY seeds from the live
+      #     CDISC Library instead of the published pickle metadata — or provision the
+      #     file out of band and just point at it. With no store runs still succeed —
+      #     every library-dependent rule SKIPs, loudly and by name.
+      #     ⚠ Only the store's PARENT DIRECTORY is ever created, never the file: an
+      #     empty file is a regular file, so the engine would accept it as configured
+      #     and then fail opening a malformed archive. ---
+      CDISC_METADATA_STORE: /app/data/metadata-cache.zip
       COREJ_CACHESEED_ENABLED: "${COREJ_CACHESEED_ENABLED:-false}"
+      COREJ_CACHESEED_FROMAPI: "${COREJ_CACHESEED_FROMAPI:-false}"
       # --- installed external dictionaries (none ship; until installed, dictionary
       #     rules SKIP loudly by name). Also on the persistent volume.
       #     ⚠⚠ This image bakes NO installer — the installer is the CLI, a separate

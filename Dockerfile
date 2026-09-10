@@ -91,8 +91,8 @@ COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 
 # Writable area mounted at /app/data: per-session uploads and per-run report/log
 # JSON (COREJ_SESSIONS_DIR / COREJ_REPORTS_DIR) plus everything that must survive
-# a rebuild — the rule corpora, the dictionary store and the CDISC Library API
-# cache. The compose stack bind-mounts ./corej-data here, which keeps the host's
+# a rebuild — the rule corpora, the dictionary store and the unified CDISC
+# metadata store. The compose stack bind-mounts ./corej-data here, which keeps the host's
 # ownership, so the host dir must be owned by uid 1000 (this image's runtime
 # user). These subdirs are created here so they exist in the image layer; the
 # entrypoint re-creates them at startup against whatever is mounted.
@@ -108,8 +108,17 @@ COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 # these directories are created here and why the entrypoint falls back to the
 # bundle's own empty copies rather than leaving a dangling path. An EMPTY store
 # degrades to a loud per-rule SKIP; a MISSING one throws.
+#
+# ⚠ No /app/data/api-cache: the CDISC Library web-API cache it held is retired and
+# read by nothing here. Baking it back in would also make the entrypoint's
+# migration notice fire on a fresh mountless `docker run`, reporting an image-layer
+# directory no operator ever populated as a legacy cache.
+# ⚠⚠ The metadata store FILE is deliberately not created — here or in the
+# entrypoint, only its parent directory. An empty file is a regular file, so the
+# engine accepts it as configured and then fails opening a malformed archive,
+# instead of degrading to "no store configured" and the loud per-rule SKIP.
 RUN mkdir -p /app/data/sessions /app/data/reports /app/data/rules \
-       /app/data/rules-define /app/data/dictionaries /app/data/api-cache \
+       /app/data/rules-define /app/data/dictionaries \
  && chmod +x /app/dist/run.sh /app/docker-entrypoint.sh \
  && chown -R corej:corej /app
 
@@ -122,14 +131,21 @@ ENV COREJ_RULES_DIR=/app/data/rules
 ENV COREJ_DEFINE_RULES_DIR=/app/data/rules-define
 ENV COREJ_DICTIONARIES_DIR=/app/data/dictionaries
 
-# The CDISC Library web-API cache — a DIRECTORY that corej.cache-seed fills and
-# every run reads.
-# ⚠⚠ Left unset the client falls back to ~/.cdiscApiCache, and this image's
-# runtime user is created with `useradd --home-dir /app`, so that resolves to
-# /app/.cdiscApiCache — an IMAGE-LAYER path outside the /app/data bind mount. The
-# cache would then be discarded with every container replacement and cost a full
-# re-seed.
-ENV CDISC_API_CACHE=/app/data/api-cache
+# The unified CDISC metadata store — a single zip FILE that corej.cache-seed fills
+# and every run reads. It is also the store the service validates against: since
+# the F2 fix, corej.cache-seed.target-store outranks this variable, so seeding one
+# file and reading another is not possible.
+# ⚠⚠ Left unset the engine falls back to ~/.cumbaDataBrowser/metadata-cache.zip,
+# and this image's runtime user is created with `useradd --home-dir /app`, so that
+# resolves to /app/.cumbaDataBrowser/metadata-cache.zip — an IMAGE-LAYER path
+# outside the /app/data bind mount. The store would then be discarded with every
+# container replacement and cost a full re-seed.
+# ⚠ Nothing creates it for you. Start once with COREJ_CACHESEED_ENABLED=true
+# (add COREJ_CACHESEED_FROMAPI=true plus CDISC_API_KEY to seed from the live CDISC
+# Library instead of the published pickle metadata), or provision the file out of
+# band. Without one the service still runs — every library-dependent rule SKIPs,
+# loudly and by name.
+ENV CDISC_METADATA_STORE=/app/data/metadata-cache.zip
 
 USER corej
 EXPOSE 8080

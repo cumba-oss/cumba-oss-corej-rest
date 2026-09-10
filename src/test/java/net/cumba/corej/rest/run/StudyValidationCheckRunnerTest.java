@@ -173,22 +173,89 @@ class StudyValidationCheckRunnerTest
      * buildParams would throw instead of resolving.
      *
      * <p>
-     * Requires the build environment's configured metadata catalogue
-     * ({@code CDISC_PICKLE_CACHE_DIR}); skipped, not red, where none is configured.
+     * Requires the build environment's configured metadata catalogue — since cache 8b-1 the unified
+     * metadata store ({@code CDISC_METADATA_STORE} / {@code cdisc.metadata.store}); skipped, not
+     * red, where none is configured.
      * </p>
      */
     @Test
     void buildParams_bareTokenResolvesThroughTheConfiguredCatalogue_notVerbatim()
     {
         org.junit.jupiter.api.Assumptions.assumeTrue(
-                net.cumba.corej.core.metadata.pickle.PickleMetadataProviderFactory
-                        .resolveConfiguredDir(null) != null,
-                "requires a configured pickle metadata cache (CDISC_PICKLE_CACHE_DIR)");
+                net.cumba.corej.core.metadata.store.StoreMetadataProviderFactory
+                        .resolveConfiguredFile(null) != null,
+                "requires a configured unified metadata store (CDISC_METADATA_STORE / "
+                        + "cdisc.metadata.store)");
 
         StudyValidationParams p = StudyValidationCheckRunner
                 .buildParams(run(withMetadataProducts("adamig-1-3")), session);
 
         assertThat(p.metadataProducts()).containsExactly("standards/adam/adamig-1-3");
+    }
+
+
+    /**
+     * Review finding F2 (second half): the REST surface named its store in
+     * {@code corej.cache-seed.target-store}, <b>seeded</b> that file at startup, and then handed
+     * the engine nothing — so a deployment with {@code target-store=B} and an ambient
+     * {@code CDISC_METADATA_STORE=A} seeded B and validated against A forever, silently
+     * ({@code CacheSeedInitializer.publishDefaultIfUnconfigured} publishes nothing once anything
+     * else is configured, and the system property it publishes into is the lowest tier anyway). The
+     * fix routes the configured store onto {@code StudyValidationParams.metadataStore()}, the
+     * explicit top tier of {@code StoreMetadataProviderFactory.resolveConfiguredFile}.
+     *
+     * <p>
+     * ⚠ The ambient store installed here is the <b>system property</b>, not the environment
+     * variable: a JVM cannot set its own environment, so the property is the only ambient tier a
+     * test can install — and it ranks one <em>below</em> {@code CDISC_METADATA_STORE}. Losing to it
+     * before the fix therefore implies losing to the environment variable a fortiori, so proving
+     * the weaker case proves the reported one. (Same argument as the engine-side test in
+     * {@code cumba-oss-corej}.)
+     * </p>
+     */
+    @Test
+    void buildParams_configuredTargetStoreOutranksAnAmbientStore(@TempDir Path dir) throws Exception
+    {
+        Path ambient = dir.resolve("ambient-store.zip");
+        Path named = dir.resolve("named-store.zip");
+        new net.cumba.corej.core.metadata.store.MetadataStoreWriter().publishedCtPackages(List.of())
+                .productCatalogue(List.of()).write(ambient);
+        new net.cumba.corej.core.metadata.store.MetadataStoreWriter().publishedCtPackages(List.of())
+                .productCatalogue(List.of()).write(named);
+
+        net.cumba.corej.rest.config.CorejProperties props = new net.cumba.corej.rest.config.CorejProperties();
+        props.getCacheSeed().setTargetStore(named.toString());
+
+        String key = net.cumba.corej.core.metadata.store.StoreMetadataProviderFactory.STORE_PROPERTY;
+        String saved = System.getProperty(key);
+        try
+        {
+            System.setProperty(key, ambient.toString());
+            StudyValidationParams p = StudyValidationCheckRunner.buildParams(
+                    run(withRulePackages(new CheckRunRequest(null, null, null, null, null, null,
+                            null, null, null))),
+                    session, null, java.util.function.UnaryOperator.identity(),
+                    StudyValidationCheckRunner.configuredRunStore(props));
+
+            // The engine resolves the run's store through exactly this call; asserting on it
+            // rather than on the raw field pins the PRECEDENCE, not just the plumbing.
+            assertThat(net.cumba.corej.core.metadata.store.StoreMetadataProviderFactory
+                    .resolveConfiguredFile(p.metadataStore()))
+                            .as("the store named by corej.cache-seed.target-store must outrank "
+                                    + "an ambient one")
+                            .isEqualTo(named.toAbsolutePath());
+        }
+        finally
+        {
+            if (saved == null)
+            {
+                System.clearProperty(key);
+            }
+            else
+            {
+                System.setProperty(key, saved);
+            }
+        }
     }
 
 
@@ -216,7 +283,7 @@ class StudyValidationCheckRunnerTest
         assertThat(p.dataLibrary()).isEqualTo(session.directory().toString());
         assertThat(p.rulesPackages()).isEqualTo(RULE_PACKAGES);
         // -mp tokens are resolved onto full standards/... cache keys (full-form tokens
-        // resolve with or without a configured pickle cache).
+        // resolve with or without a configured metadata store).
         assertThat(p.metadataProducts()).containsExactly("standards/tig/1-0/adam");
         assertThat(p.useCase()).isEqualTo("uc");
         assertThat(p.defineVersion()).isEqualTo("2.1");

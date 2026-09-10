@@ -255,13 +255,14 @@ public class CorejProperties
 
 
     /**
-     * Startup seeding of the CDISC Library web-api cache from the Python engine's pickle metadata,
-     * for deployments without an API key.
+     * Startup seeding of the unified CDISC metadata store — from the Python engine's pickle
+     * metadata for deployments without an API key, or from the live CDISC Library API with one
+     * ({@code from-api}).
      *
      * <p>
      * Opt-in and initialization-only: there is deliberately no HTTP endpoint, because seeding
-     * performs network I/O, writes to a server-side directory and takes minutes. Everything it uses
-     * is server-configured; nothing is caller-supplied.
+     * performs network I/O, writes to a server-side file and takes minutes. Everything it uses is
+     * server-configured; nothing is caller-supplied.
      * </p>
      */
     public static class CacheSeed
@@ -285,11 +286,34 @@ public class CorejProperties
         /** Seed from this local pickle directory instead of downloading. */
         private @Nullable String fromDir;
 
-        /** Target cache directory; blank uses the CDISC_API_CACHE default. */
-        private @Nullable String targetDir;
+        /**
+         * Seed from the live CDISC Library API instead of pickles — needs an API key
+         * ({@code CDISC_API_KEY} / {@code cdisc.library.api.key}). Mutually exclusive with
+         * {@code from-dir}.
+         */
+        private boolean fromApi;
 
-        /** Whether to replace cache entries that already exist. */
-        private boolean overwrite;
+        /**
+         * Target store file; blank uses {@code CDISC_METADATA_STORE} / {@code
+         * cdisc.metadata.store}, then the application default
+         * ({@code ~/.cumbaDataBrowser/metadata-cache.zip}).
+         *
+         * <p>
+         * ⭐ This is also <b>the store every validation run reads</b>
+         * ({@code StudyValidationCheckRunner.configuredRunStore}), and it outranks an ambient
+         * {@code CDISC_METADATA_STORE} — seeding one file and validating another was review finding
+         * F2. It applies whether or not {@code enabled} is set: naming a store file is meaningful
+         * for a deployment that provisions the store out of band and only points at it.
+         * </p>
+         */
+        private @Nullable String targetStore;
+
+        /**
+         * Re-acquire everything, ignoring what the existing store already holds (plan §5.2's
+         * {@code --refresh}); without it, content the store holds is carried forward and a store
+         * that already exists is not re-seeded at all.
+         */
+        private boolean refresh;
 
         public boolean isEnabled()
         {
@@ -363,27 +387,39 @@ public class CorejProperties
         }
 
 
-        public @Nullable String getTargetDir()
+        public boolean isFromApi()
         {
-            return targetDir;
+            return fromApi;
         }
 
 
-        public void setTargetDir(@Nullable String targetDir)
+        public void setFromApi(boolean fromApi)
         {
-            this.targetDir = targetDir;
+            this.fromApi = fromApi;
         }
 
 
-        public boolean isOverwrite()
+        public @Nullable String getTargetStore()
         {
-            return overwrite;
+            return targetStore;
         }
 
 
-        public void setOverwrite(boolean overwrite)
+        public void setTargetStore(@Nullable String targetStore)
         {
-            this.overwrite = overwrite;
+            this.targetStore = targetStore;
+        }
+
+
+        public boolean isRefresh()
+        {
+            return refresh;
+        }
+
+
+        public void setRefresh(boolean refresh)
+        {
+            this.refresh = refresh;
         }
     }
 }

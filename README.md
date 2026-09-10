@@ -241,7 +241,8 @@ Service settings live under the `corej:` key in `src/main/resources/application.
 | `corej.persistence.rehydrate-on-startup` | `true` | rebuild sessions and runs from their on-disk manifests at startup |
 | `corej.runs.max-parallel` | `2` | concurrently executing check runs across all sessions; the rest queue as `PENDING` |
 | `corej.engine.max-errors-per-rule` | unset | service-wide default per-rule findings cap |
-| `corej.cache-seed.*` | `enabled: false` | opt-in, startup-only seeding of the CDISC Library cache from the Python engine's pickles, for deployments with no API key |
+| `corej.cache-seed.*` | `enabled: false` | opt-in, startup-only seeding of the unified CDISC metadata store — from the Python engine's pickles for deployments with no API key, or from the live CDISC Library with `from-api: true` |
+| `corej.cache-seed.target-store` | unset → `CDISC_METADATA_STORE` / `cdisc.metadata.store`, else `~/.cumbaDataBrowser/metadata-cache.zip` | the store file to seed — **and the store every validation run reads**, outranking an ambient `CDISC_METADATA_STORE`, so seeding and validating cannot drift apart. Applies even with `enabled: false`, for a deployment that provisions the store out of band and only points at it |
 
 Set `sessions.dir` and `reports.dir` to distinct **persistent** directories to survive a restart;
 a temp dir is always fresh, so `rehydrate-on-startup` has no effect there.
@@ -311,8 +312,8 @@ curl -fsS http://localhost:8080/api/info
 
 The build stage runs one `mvn -B -DskipTests package` and unpacks the dist zip; the runtime stage
 is a JRE over that bundle, running as uid 1000. Compose bind-mounts `./corej-data` at `/app/data`,
-so sessions, reports, the rule corpora, the dictionary store and the CDISC Library API cache all
-stay on the host — `mkdir -p corej-data && sudo chown -R 1000:1000 corej-data` once, first.
+so sessions, reports, the rule corpora, the dictionary store and the unified CDISC metadata store
+all stay on the host — `mkdir -p corej-data && sudo chown -R 1000:1000 corej-data` once, first.
 Copy `.env.example` to `.env` to change any of it.
 
 Three things the image deliberately does **not** carry, each announced once at startup rather than
@@ -327,6 +328,14 @@ discovered per run:
 - **No dictionary installer.** The installer is the CLI, a separate repository. Run the
   `cumba-oss-corej-cli` image against the same `./corej-data`, or mount a licensed distribution at
   `/licensed-dictionaries/<type>`.
+- **No metadata store.** `CDISC_METADATA_STORE` is pointed at
+  `/app/data/metadata-cache.zip` on the bind mount — the engine's own default
+  `~/.cumbaDataBrowser/metadata-cache.zip` would be an image-layer path, because the runtime user's
+  home is `/app` — but the file itself is never created: only its parent directory, because an
+  empty file is a regular file the engine accepts as configured and then fails to open. Seed it
+  once with `COREJ_CACHESEED_ENABLED=true`, or provision it out of band.
+  ⚠ A `corej-data/api-cache` left over from an earlier deployment is the **retired** web-API cache;
+  nothing reads it, and the container says so once at startup.
 
 ## What is deliberately not here
 

@@ -25,11 +25,10 @@ import org.junit.jupiter.api.Test;
  * operator silently gets the defaults they thought they were overriding.
  *
  * <p>
- * That is exactly what happened in the internal twin: a rename of {@code target-dir} →
+ * That is exactly what review finding MS-1 was: a rename of {@code target-dir} →
  * {@code target-store} and {@code overwrite} → {@code refresh} swept the Java but not the yaml,
- * re-opening a seeding-target inversion for anyone who followed the shipped comments. This test
- * pins the key <i>names</i>, which is the half a doc block can be checked on — and it is what will
- * red here when that rename reaches this client.
+ * re-opening the F2 store inversion for anyone who followed the shipped comments. This test pins
+ * the key <i>names</i>, which is the half a doc block can be checked on.
  * </p>
  *
  * <p>
@@ -73,21 +72,16 @@ class ApplicationYamlKeysTest
     }
 
 
-    /**
-     * Guards the check itself. A name-set that accidentally contained everything — or nothing —
-     * would let the test above pass vacuously, so both directions are pinned: the seed keys this
-     * client actually ships bind, and a name {@link CorejProperties} does not declare does not.
-     */
+    /** Guards the parser itself: the retired names must NOT be considered bindable. */
     @Test
-    void theBindableNameSetIsNeitherEmptyNorEverything()
+    void retiredSeedNamesAreNotBindable()
     {
         Set<String> bindable = bindableNames(CorejProperties.class, new HashSet<>());
-        assertTrue(bindable.contains("cache-seed"));
-        assertTrue(bindable.contains("target-dir"));
-        assertTrue(bindable.contains("overwrite"));
-        assertTrue(bindable.contains("archive-url-template"));
-        assertFalse(bindable.contains("no-such-configuration-key"),
-                "a name CorejProperties does not declare must not be reported as bindable");
+        assertFalse(bindable.contains("target-dir"), "target-dir was renamed to target-store");
+        assertFalse(bindable.contains("overwrite"), "overwrite was renamed to refresh");
+        assertTrue(bindable.contains("target-store"));
+        assertTrue(bindable.contains("refresh"));
+        assertTrue(bindable.contains("from-api"));
     }
 
 

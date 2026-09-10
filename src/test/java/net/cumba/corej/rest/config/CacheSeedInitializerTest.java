@@ -3,6 +3,7 @@ package net.cumba.corej.rest.config;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -13,44 +14,49 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import net.cumba.cdisc.library.api.client.CdiscLibraryClient;
+import net.cumba.corej.core.metadata.store.MetadataStore;
+import net.cumba.corej.core.metadata.store.StoreMetadataProviderFactory;
 import net.razorvine.pickle.Pickler;
-import org.junit.jupiter.api.BeforeAll;
+import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.DefaultApplicationArguments;
 
 /**
- * {@link CacheSeedInitializer}: startup seeding from a local pickle directory, and — the property
- * that matters most — that a seeding failure never propagates out of startup.
+ * {@link CacheSeedInitializer}: startup seeding of the unified metadata store from a local pickle
+ * directory, and — the property that matters most — that a seeding failure never propagates out of
+ * startup.
  */
 class CacheSeedInitializerTest
 {
 
     /**
-     * States the ambient configuration these tests depend on instead of inheriting it silently.
-     *
-     * <p>
-     * {@link CacheSeedInitializer} seeds against {@link CdiscLibraryClient#getApiUrl()}, and the
-     * seeder derives the cache file-name prefix from that URL's path — so the {@code api_…} names
-     * asserted below hold only for the default base URL. {@code getApiUrl} consults the
-     * <b>environment</b> variable {@code CDISC_API_URL} first, which a JVM cannot unset for itself;
-     * the dependency can therefore only be declared, not removed. Failing here names the cause,
-     * where the assertions themselves would only report a missing file.
-     * </p>
-     *
-     * <p>
-     * {@code CDISC_API_CACHE} cannot leak in: every case below sets {@code target-dir} explicitly,
-     * so {@code resolveTargetDir} never reaches its environment fallback.
-     * </p>
+     * ⚠ {@code CacheSeedInitializer} publishes the seeded store into {@code cdisc.metadata.store}
+     * when nothing else configured one — a process-global side effect these tests must isolate and
+     * restore, or they would leak a temp-file store into every later test in this JVM.
      */
-    @BeforeAll
-    static void theAmbientLibraryUrlMustBeTheDefault()
+    private @Nullable String savedStoreProperty;
+
+    @BeforeEach
+    void saveStoreProperty()
     {
-        assertEquals(CdiscLibraryClient.DEFAULT_BASE_URL, CdiscLibraryClient.getApiUrl(),
-                "these tests assert cache file names derived from the default CDISC Library base "
-                        + "URL; unset CDISC_API_URL (env) / cdisc.library.api.url (system "
-                        + "property) before running them");
+        savedStoreProperty = System.getProperty(StoreMetadataProviderFactory.STORE_PROPERTY);
+    }
+
+
+    @AfterEach
+    void restoreStoreProperty()
+    {
+        if (savedStoreProperty == null)
+        {
+            System.clearProperty(StoreMetadataProviderFactory.STORE_PROPERTY);
+        }
+        else
+        {
+            System.setProperty(StoreMetadataProviderFactory.STORE_PROPERTY, savedStoreProperty);
+        }
     }
 
 
@@ -65,54 +71,91 @@ class CacheSeedInitializerTest
     }
 
 
-    private static CacheSeedInitializer initializer(Path aFromDir, Path aTargetDir,
-            boolean aOverwrite)
+    private static CacheSeedInitializer initializer(Path aFromDir, Path aTargetStore,
+            boolean aRefresh)
     {
         CorejProperties props = new CorejProperties();
         CorejProperties.CacheSeed seed = props.getCacheSeed();
         seed.setEnabled(true);
         seed.setFromDir(aFromDir.toString());
-        seed.setTargetDir(aTargetDir.toString());
-        seed.setOverwrite(aOverwrite);
+        seed.setTargetStore(aTargetStore.toString());
+        seed.setRefresh(aRefresh);
         return new CacheSeedInitializer(props);
     }
 
 
     @Test
-    void seedsTheConfiguredTargetDirectoryAtStartup(@TempDir Path root) throws IOException
+    void seedsTheConfiguredTargetStoreAtStartup(@TempDir Path root) throws IOException
     {
-        Path target = root.resolve("cache");
+        Path target = root.resolve("metadata-cache.zip");
 
         initializer(pickleDir(root), target, false).run(new DefaultApplicationArguments());
 
-        assertTrue(Files.exists(
-                target.resolve("api_mdr_ct_packages_sdtmct-2024-09-27%3Fexpand%3Dtrue.json.gz")));
-        assertTrue(Files.exists(target.resolve("api_mdr_ct_packages.json.gz")));
+        // The load-bearing check: the written file must open through the ENGINE's own reader.
+        try (MetadataStore opened = MetadataStore.open(target))
+        {
+            assertEquals(List.of("sdtmct-2024-09-27"), opened.publishedCtPackages());
+        }
     }
 
 
     /**
-     * The load-bearing behaviour: a metadata cache is an optimisation, not a precondition, so an
+     * The seeded store is published into {@code cdisc.metadata.store} when nothing else configured
+     * one — that property is how the engine finds the store, and without the publication a seeded
+     * deployment would still run degraded (every library rule skipping) with nothing red.
+     */
+    @Test
+    void theSeededStoreIsPublishedForTheEngine(@TempDir Path root) throws IOException
+    {
+        org.junit.jupiter.api.Assumptions.assumeTrue(System.getenv("CDISC_METADATA_STORE") == null,
+                "CDISC_METADATA_STORE is set — the publication branch is untestable");
+        System.clearProperty(StoreMetadataProviderFactory.STORE_PROPERTY);
+        Path target = root.resolve("metadata-cache.zip");
+
+        initializer(pickleDir(root), target, false).run(new DefaultApplicationArguments());
+
+        assertEquals(target.toAbsolutePath().toString(),
+                System.getProperty(StoreMetadataProviderFactory.STORE_PROPERTY));
+    }
+
+
+    /** An explicitly configured store property is never overridden by the publication. */
+    @Test
+    void anExplicitStoreConfigurationIsNotOverridden(@TempDir Path root) throws IOException
+    {
+        Path elsewhere = root.resolve("operator-store.zip");
+        System.setProperty(StoreMetadataProviderFactory.STORE_PROPERTY, elsewhere.toString());
+        Path target = root.resolve("metadata-cache.zip");
+
+        initializer(pickleDir(root), target, false).run(new DefaultApplicationArguments());
+
+        assertEquals(elsewhere.toString(),
+                System.getProperty(StoreMetadataProviderFactory.STORE_PROPERTY));
+    }
+
+
+    /**
+     * The load-bearing behaviour: a metadata store is an optimisation, not a precondition, so an
      * unreachable source must not abort application startup.
      */
     @Test
     void aSeedingFailureDoesNotPropagate(@TempDir Path root)
     {
         CacheSeedInitializer initializer = initializer(root.resolve("does-not-exist"),
-                root.resolve("cache"), false);
+                root.resolve("metadata-cache.zip"), false);
 
         assertDoesNotThrow(() -> initializer.run(new DefaultApplicationArguments()));
-        assertFalse(Files.exists(root.resolve("cache").resolve("api_mdr_ct_packages.json.gz")));
+        assertFalse(Files.exists(root.resolve("metadata-cache.zip")));
     }
 
 
     /**
      * H2 regression guard. Target resolution used to sit outside the try block, so a malformed
-     * {@code target-dir} threw {@code InvalidPathException} straight out of {@code run()} and
-     * aborted Spring context startup — the one thing this class promises cannot happen.
+     * target threw {@code InvalidPathException} straight out of {@code run()} and aborted Spring
+     * context startup — the one thing this class promises cannot happen.
      */
     @Test
-    void aMalformedTargetDirDoesNotAbortStartup(@TempDir Path root) throws IOException
+    void aMalformedTargetStoreDoesNotAbortStartup(@TempDir Path root) throws IOException
     {
         CorejProperties props = new CorejProperties();
         CorejProperties.CacheSeed seed = props.getCacheSeed();
@@ -123,7 +166,7 @@ class CacheSeedInitializerTest
         // silently degrade into using a perfectly valid path.
         String malformed = "bad" + (char) 0 + "path";
         assertThrows(InvalidPathException.class, () -> Path.of(malformed));
-        seed.setTargetDir(malformed);
+        seed.setTargetStore(malformed);
         CacheSeedInitializer initializer = new CacheSeedInitializer(props);
 
         assertDoesNotThrow(() -> initializer.run(new DefaultApplicationArguments()));
@@ -131,30 +174,84 @@ class CacheSeedInitializerTest
 
 
     /**
-     * M9: with the cache already populated and {@code overwrite} false, startup must not re-run the
-     * whole download/extract/read cycle just to skip every write.
+     * M9: with the store already present and {@code refresh} false, startup must not re-run the
+     * whole download/extract/read cycle just to rebuild an existing store.
      */
     @Test
-    void anAlreadyPopulatedCacheIsNotReseeded(@TempDir Path root) throws IOException
+    void anExistingStoreIsNotReseeded(@TempDir Path root) throws IOException
     {
         Path pkl = pickleDir(root);
-        Path target = root.resolve("cache");
+        Path target = root.resolve("metadata-cache.zip");
         initializer(pkl, target, false).run(new DefaultApplicationArguments());
-        Path entry = target
-                .resolve("api_mdr_ct_packages_sdtmct-2024-09-27%3Fexpand%3Dtrue.json.gz");
-        assertTrue(Files.exists(entry));
-        Files.setLastModifiedTime(entry, java.nio.file.attribute.FileTime.fromMillis(0));
+        assertTrue(Files.isRegularFile(target));
+        Files.setLastModifiedTime(target, java.nio.file.attribute.FileTime.fromMillis(0));
 
         // A source that would explode if it were resolved proves the short-circuit fired.
         CorejProperties props = new CorejProperties();
         CorejProperties.CacheSeed seed = props.getCacheSeed();
         seed.setEnabled(true);
         seed.setFromDir(root.resolve("nonexistent-source").toString());
-        seed.setTargetDir(target.toString());
+        seed.setTargetStore(target.toString());
         new CacheSeedInitializer(props).run(new DefaultApplicationArguments());
 
-        assertEquals(0, Files.getLastModifiedTime(entry).toMillis(),
-                "a populated cache must be left completely alone");
+        assertEquals(0, Files.getLastModifiedTime(target).toMillis(),
+                "an existing store must be left completely alone");
+    }
+
+
+    /** {@code refresh} rebuilds even an existing store, re-acquiring everything. */
+    @Test
+    void refreshRebuildsAnExistingStore(@TempDir Path root) throws IOException
+    {
+        Path pkl = pickleDir(root);
+        Path target = root.resolve("metadata-cache.zip");
+        initializer(pkl, target, false).run(new DefaultApplicationArguments());
+        Files.setLastModifiedTime(target, java.nio.file.attribute.FileTime.fromMillis(0));
+
+        initializer(pkl, target, true).run(new DefaultApplicationArguments());
+
+        assertTrue(Files.getLastModifiedTime(target).toMillis() > 0,
+                "refresh must rebuild the store");
+    }
+
+
+    /**
+     * {@code from-api} without an API key skips seeding with a WARN — never a throw, never a
+     * network attempt, and startup continues.
+     */
+    @Test
+    void fromApiWithoutAnApiKeySkipsSeeding(@TempDir Path root)
+    {
+        org.junit.jupiter.api.Assumptions.assumeTrue(
+                System.getenv("CDISC_API_KEY") == null
+                        && System.getProperty("cdisc.library.api.key") == null,
+                "a CDISC Library API key is configured — the keyless skip is untestable");
+        CorejProperties props = new CorejProperties();
+        CorejProperties.CacheSeed seed = props.getCacheSeed();
+        seed.setEnabled(true);
+        seed.setFromApi(true);
+        seed.setTargetStore(root.resolve("metadata-cache.zip").toString());
+        CacheSeedInitializer initializer = new CacheSeedInitializer(props);
+
+        assertDoesNotThrow(() -> initializer.run(new DefaultApplicationArguments()));
+        assertFalse(Files.exists(root.resolve("metadata-cache.zip")));
+    }
+
+
+    /** {@code from-api} beside {@code from-dir} is a configuration contradiction: skip, WARN. */
+    @Test
+    void fromApiBesideFromDirSkipsSeeding(@TempDir Path root) throws IOException
+    {
+        CorejProperties props = new CorejProperties();
+        CorejProperties.CacheSeed seed = props.getCacheSeed();
+        seed.setEnabled(true);
+        seed.setFromApi(true);
+        seed.setFromDir(pickleDir(root).toString());
+        seed.setTargetStore(root.resolve("metadata-cache.zip").toString());
+        CacheSeedInitializer initializer = new CacheSeedInitializer(props);
+
+        assertDoesNotThrow(() -> initializer.run(new DefaultApplicationArguments()));
+        assertFalse(Files.exists(root.resolve("metadata-cache.zip")));
     }
 
 
@@ -164,29 +261,10 @@ class CacheSeedInitializerTest
         CorejProperties.CacheSeed seed = new CorejProperties().getCacheSeed();
 
         assertFalse(seed.isEnabled(), "seeding must be opt-in");
-        assertFalse(seed.isOverwrite());
-        assertEquals(null, seed.getRepoUri());
-        assertEquals(null, seed.getFromDir());
-        assertEquals(null, seed.getTargetDir());
-    }
-
-
-    @Test
-    void rerunSkipsExistingEntriesUnlessOverwriteIsSet(@TempDir Path root) throws IOException
-    {
-        Path pkl = pickleDir(root);
-        Path target = root.resolve("cache");
-        initializer(pkl, target, false).run(new DefaultApplicationArguments());
-        Path entry = target
-                .resolve("api_mdr_ct_packages_sdtmct-2024-09-27%3Fexpand%3Dtrue.json.gz");
-        Files.setLastModifiedTime(entry, java.nio.file.attribute.FileTime.fromMillis(0));
-
-        initializer(pkl, target, false).run(new DefaultApplicationArguments());
-        assertEquals(0, Files.getLastModifiedTime(entry).toMillis(),
-                "skip-existing must leave the entry untouched");
-
-        initializer(pkl, target, true).run(new DefaultApplicationArguments());
-        assertTrue(Files.getLastModifiedTime(entry).toMillis() > 0,
-                "overwrite must rewrite the entry");
+        assertFalse(seed.isRefresh());
+        assertFalse(seed.isFromApi());
+        assertNull(seed.getRepoUri());
+        assertNull(seed.getFromDir());
+        assertNull(seed.getTargetStore());
     }
 }

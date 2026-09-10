@@ -1,12 +1,16 @@
 #!/bin/sh
 # coreJ REST container entrypoint.
 #
-# "Custom" data — the rule corpora, the dictionary store and the CDISC Library API
-# cache — lives on the persistent volume mounted at /app/data, so it survives image
-# rebuilds. Every block below guarantees its directory EXISTS, mirrors the bundle's
-# own (empty) copy into it so the "put the corpus here" READMEs land where the
-# operator will look, says once which stores are empty, and then launches the
-# service.
+# "Custom" data — the rule corpora, the dictionary store and the unified CDISC
+# metadata store — lives on the persistent volume mounted at /app/data, so it
+# survives image rebuilds. Every block below guarantees its directory EXISTS,
+# mirrors the bundle's own (empty) copy into it so the "put the corpus here"
+# READMEs land where the operator will look, says once which stores are empty or
+# absent, and then launches the service.
+#
+# ⚠⚠ The metadata store is the exception: it is a single zip FILE, only its PARENT
+# DIRECTORY is created, and an ABSENT store is the good degradation. See its block
+# below.
 set -eu
 
 # ------------------------------------------------------------------
@@ -44,25 +48,53 @@ else
 fi
 
 # ------------------------------------------------------------------
-# The CDISC Library web-API cache.
+# The unified CDISC metadata store.
 #
-# A DIRECTORY, read through CDISC_API_CACHE (env) or cdisc.library.api.cache
-# (sysprop). Left unset the client falls back to ~/.cdiscApiCache, and this image's
-# runtime user is created with `useradd --home-dir /app`, so that resolves to
-# /app/.cdiscApiCache — an IMAGE-LAYER path outside the /app/data bind mount. The
-# cache would then be discarded with every container replacement and cost a full
-# re-seed. So default it into the mount and export it, which also covers a bare
-# `docker run` that sets no environment.
+# A single zip FILE, read by the engine through CDISC_METADATA_STORE (env, the tier
+# operators set) or cdisc.metadata.store (sysprop) — see
+# StoreMetadataProviderFactory.resolveConfiguredFile. Left unset entirely the engine
+# falls back to ~/.cumbaDataBrowser/metadata-cache.zip, and this image's runtime
+# user is created with `useradd --home-dir /app`, so that resolves to
+# /app/.cumbaDataBrowser/metadata-cache.zip — an IMAGE-LAYER path outside the
+# /app/data bind mount. The store would then be discarded with every container
+# replacement and cost a full re-seed. So default it into the mount and export it,
+# which also covers a bare `docker run` that sets no environment.
+#
+# ⚠⚠ Create the store's PARENT DIRECTORY only — never the file. An empty file is a
+# regular file, so resolveConfiguredFile ACCEPTS it and MetadataStore.open then
+# fails on a malformed archive. That is strictly worse than an absent store, which
+# degrades cleanly to "no store configured" and the loud per-rule SKIP.
 #
 # ⛔ Seeding is deliberately NOT done here. The service already has it, opt-in via
-# corej.cache-seed.* (COREJ_CACHESEED_ENABLED=true), and its target is this same
-# cache. A second seeding path in shell would be a second thing to keep in step.
+# corej.cache-seed.* (COREJ_CACHESEED_ENABLED=true), and since the F2 fix its target
+# IS the store every run reads. A second seeding path in shell would re-open exactly
+# the seed-B-validate-A split that fix closed.
 # ------------------------------------------------------------------
-API_CACHE="${CDISC_API_CACHE:-/app/data/api-cache}"
-export CDISC_API_CACHE="$API_CACHE"
-if mkdir -p "$API_CACHE" 2>/dev/null; then :; else
-    echo "warning: cannot create $API_CACHE for the CDISC Library API cache; every" \
-        "library-dependent rule will SKIP (loudly, by name)" >&2
+STORE="${CDISC_METADATA_STORE:-/app/data/metadata-cache.zip}"
+export CDISC_METADATA_STORE="$STORE"
+if mkdir -p "$(dirname "$STORE")" 2>/dev/null; then :; else
+    echo "warning: cannot create $(dirname "$STORE") for the CDISC metadata store;" \
+        "seeding will fail there and every library-dependent rule will SKIP (loudly," \
+        "by name)" >&2
+fi
+
+# Migration notice. Deployments predating the unified store configured the retired
+# CDISC Library web-API cache (CDISC_API_CACHE, /app/data/api-cache); nothing reads
+# it any more. Such a deployment keeps starting and keeps validating — it just skips
+# every library-dependent rule, SILENTLY, because the operator believes the cache
+# they populated is still doing its job. Say it once, naming the seed route.
+# ⚠ CDISC_API_CACHE is read HERE ONLY to locate that legacy directory, so a stack
+# that overrode it is detected too. It is never created, and nothing downstream
+# reads it any more — the service has no web-API cache.
+LEGACY_CACHE_DIR="${CDISC_API_CACHE:-/app/data/api-cache}"
+if [ -d "$LEGACY_CACHE_DIR" ] && [ ! -f "$STORE" ]; then
+    echo "warning: $LEGACY_CACHE_DIR is a retired CDISC Library web-API cache and is no" \
+        "longer read by anything, and the unified metadata store $STORE does not exist" \
+        "— every library-dependent rule will SKIP (loudly, by name). Seed the store once" \
+        "by starting with COREJ_CACHESEED_ENABLED=true (add COREJ_CACHESEED_FROMAPI=true" \
+        "plus CDISC_API_KEY to seed from the live CDISC Library instead of the published" \
+        "pickle metadata), or provision $STORE out of band. Then delete" \
+        "$LEGACY_CACHE_DIR." >&2
 fi
 
 # ------------------------------------------------------------------
@@ -160,12 +192,15 @@ if [ ! -f "$COREJ_DEFINE_RULES_DIR/packages.json" ]; then
         "./corej-data/rules-define on the host." >&2
 fi
 
-# The API cache, same surface.
-if ! find "$CDISC_API_CACHE" -type f 2>/dev/null | grep -q .; then
-    echo "notice: the CDISC Library API cache at $CDISC_API_CACHE is empty — every" \
-        "library-dependent rule will SKIP (loudly, by name). Seed it once by starting" \
-        "with COREJ_CACHESEED_ENABLED=true (corej.cache-seed.enabled), or provision the" \
-        "directory out of band and point CDISC_API_CACHE at it." >&2
+# The metadata store, same surface. ⚠ Suppressed when the migration notice above
+# already fired, which says the same thing and more.
+if [ ! -f "$STORE" ] && [ ! -d "$LEGACY_CACHE_DIR" ]; then
+    echo "notice: no CDISC metadata store at $STORE — every library-dependent rule" \
+        "will SKIP (loudly, by name). Seed it once by starting with" \
+        "COREJ_CACHESEED_ENABLED=true (corej.cache-seed.enabled; add" \
+        "COREJ_CACHESEED_FROMAPI=true plus CDISC_API_KEY to seed from the live CDISC" \
+        "Library instead of the published pickle metadata), or provision the file out" \
+        "of band and point CDISC_METADATA_STORE at it." >&2
 fi
 
 # JAVA_TOOL_OPTIONS (if set) is applied automatically by the JVM.

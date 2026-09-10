@@ -64,7 +64,7 @@ public class MetaController
                     + "former standards / families / defaultFamily fields are gone.")
     public RunOptions runOptions()
     {
-        return runOptions(MetadataProductCatalogue.configured(null, null).keys());
+        return runOptions(MetadataProductCatalogue.configured().keys());
     }
 
 
@@ -78,18 +78,19 @@ public class MetaController
      * {@code PickleCache.standardKeys()}.</b> The catalogue is the one place that knows which of
      * the two sources contributed and applies the {@code "Implementation Guide"} type filter; a raw
      * pickle enumeration would offer sub-resources and foundational models the run can never load.
-     * The catalogue is memoised per resolved configuration, so this endpoint does not rebuild it
-     * per request. ⚑ The list is a convenience, not a veto (same principle as R12 for packages):
-     * the run form offers what the catalogue enumerates, and {@code ProductKeyResolver} — not this
+     * Since cache P4 the catalogue is the unified metadata store's, re-read per resolution (the old
+     * process-wide memo was removed in 19db89e), so a re-seeded store is picked up without a
+     * restart. ⚑ The list is a convenience, not a veto (same principle as R12 for packages): the
+     * run form offers what the catalogue enumerates, and {@code ProductKeyResolver} — not this
      * endpoint — decides what a submitted token resolves to.
      * </p>
      *
      * <p>
      * Separated (review R-17) for the same reason as {@link #productOptions(Set)}: the catalogue
-     * itself is built from {@code CDISC_PICKLE_CACHE_DIR} / {@code CDISC_API_CACHE}, so a test
-     * asserting the endpoint carries the product list would pass vacuously (empty list, every
-     * per-element assertion satisfied) wherever neither is configured. This seam lets the test pin
-     * the assembly against a fixed key set.
+     * itself is built from the configured metadata store ({@code CDISC_METADATA_STORE} /
+     * {@code cdisc.metadata.store}), so a test asserting the endpoint carries the product list
+     * would pass vacuously (empty list, every per-element assertion satisfied) wherever none is
+     * configured. This seam lets the test pin the assembly against a fixed key set.
      * </p>
      */
     RunOptions runOptions(Set<String> catalogueKeys)

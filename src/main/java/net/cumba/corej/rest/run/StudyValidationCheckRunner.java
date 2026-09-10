@@ -53,8 +53,49 @@ public class StudyValidationCheckRunner implements CheckRunner
         Session session = sessions.get(run.sessionId());
         // The task decorator propagates this run's log-capture sink onto every engine worker
         // thread, so engine INFO/WARN logged off the run-worker thread is still attributed here.
-        return new StudyValidationService().validate(buildParams(run, session,
-                properties.getEngine().getMaxErrorsPerRule(), debugCapture.contextPropagator()));
+        return new StudyValidationService()
+                .validate(buildParams(run, session, properties.getEngine().getMaxErrorsPerRule(),
+                        debugCapture.contextPropagator(), configuredRunStore(properties)));
+    }
+
+
+    /**
+     * The metadata store this deployment explicitly names, or {@code null} when it names none.
+     *
+     * <p>
+     * ⭐ Review finding F2. {@code corej.cache-seed.target-store} is the <b>only</b> place this
+     * service's configuration can name a store file, and it is by construction the same file the
+     * run must read: a deployment that seeds B and then validates against an ambient
+     * {@code CDISC_METADATA_STORE}=A is the reported defect, and it was silent — the seeding log
+     * says B, every run uses A, nothing warns. Handing it to the engine on
+     * {@code StudyValidationParams.metadataStore()} — the explicit top tier of
+     * {@code StoreMetadataProviderFactory.resolveConfiguredFile} — is what closes that.
+     * </p>
+     *
+     * <p>
+     * ⚠ Deliberately <b>not</b> gated on {@code corej.cache-seed.enabled}: a deployment that
+     * provisions the store out of band (baked into the image, mounted as a volume) and only
+     * <em>points</em> at it would otherwise keep the identical inversion in a narrower form. An
+     * operator who names a store file means that file, whether or not this process is the one that
+     * writes it. Deployments that name none (the default, blank) are unaffected: the engine's own
+     * environment-then-property resolution is reached exactly as before.
+     * </p>
+     *
+     * @param aProperties
+     *            the bound {@code corej.*} configuration
+     * @return the absolute store path, or {@code null} when unconfigured
+     */
+    static @Nullable String configuredRunStore(
+            net.cumba.corej.rest.config.CorejProperties aProperties)
+    {
+        String configured = aProperties.getCacheSeed().getTargetStore();
+        if (configured == null || configured.isBlank())
+        {
+            return null;
+        }
+        // Absolutised for the same reason CacheSeedInitializer absolutises its seed target: the
+        // engine resolves the path against its own working directory, not the config file's.
+        return java.nio.file.Path.of(configured).toAbsolutePath().toString();
     }
 
 
@@ -212,6 +253,20 @@ public class StudyValidationCheckRunner implements CheckRunner
     static StudyValidationParams buildParams(CheckRun run, Session session,
             @Nullable Integer defaultMaxErrorsPerRule, UnaryOperator<Runnable> taskDecorator)
     {
+        return buildParams(run, session, defaultMaxErrorsPerRule, taskDecorator, null);
+    }
+
+
+    /**
+     * @param metadataStore
+     *            the store this deployment explicitly names ({@link #configuredRunStore}), or
+     *            {@code null} to let the engine resolve one from {@code CDISC_METADATA_STORE} /
+     *            {@code cdisc.metadata.store}. A non-null value outranks both (finding F2).
+     */
+    static StudyValidationParams buildParams(CheckRun run, Session session,
+            @Nullable Integer defaultMaxErrorsPerRule, UnaryOperator<Runnable> taskDecorator,
+            @Nullable String metadataStore)
+    {
         CheckRunRequest req = run.request();
         IDataTableManager manager = new LocalDataTableManager();
         StudyValidationParams.Builder b = StudyValidationParams.builder().manager(manager)
@@ -232,7 +287,12 @@ public class StudyValidationCheckRunner implements CheckRunner
                 // service-level default for it — the threshold decides which findings exist, so it
                 // is stated by the caller who will read the report, never ambiently configured.
                 .severityThreshold(req.severityThreshold())
-                .progressListener(progressListenerFor(run)).cancellation(run::isCancelRequested)
+                // F2: the deployment's explicitly named store (configuredRunStore) travels on the
+                // params channel — the factory's top tier, above CDISC_METADATA_STORE. The seed
+                // target and the run's store are the same file by construction; seeding one and
+                // reading another is the defect this closes. null → the engine resolves its own.
+                .metadataStore(metadataStore).progressListener(progressListenerFor(run))
+                .cancellation(run::isCancelRequested)
                 // No logListener: the RunLogDebugCapture appender now captures every engine line
                 // (INFO/WARN included), so a listener here would double-record emit-routed lines.
                 // The decorator carries this run's capture sink onto the engine's worker threads.

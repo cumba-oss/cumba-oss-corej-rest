@@ -39,10 +39,11 @@ corej:
   persistence:
     rehydrate-on-startup: true
 
-  # Seed the CDISC Library web-api cache from the Python engine's pickle metadata at startup, for
-  # deployments without a CDISC Library API key. Opt-in and initialization-only — there is no HTTP
-  # endpoint, because seeding does outbound network I/O and writes to a server-side directory.
-  # Failures are logged and never abort startup. To enable:
+  # Seed the unified CDISC metadata store at startup — either from the Python engine's pickle
+  # metadata (for deployments without a CDISC Library API key) or, with a key, from the live CDISC
+  # Library API (from-api). Opt-in and initialization-only — there is no HTTP endpoint, because
+  # seeding does outbound network I/O, writes a server-side file and takes minutes. Failures are
+  # logged and never abort startup. To enable:
   #   cache-seed:
   #     enabled: true
   #     repo-uri: https://github.com/cdisc-org/cdisc-rules-engine   # blank = this default
@@ -50,8 +51,19 @@ corej:
   #     repo-path: resources/cache  # path to the *.pkl files; blank = this default
   #     archive-url-template:       # blank = the default {repo}/{ref} archive URL
   #     from-dir:                   # seed from a local pickle dir instead of downloading
-  #     target-dir:                 # blank = CDISC_API_CACHE, else ~/.cdiscApiCache
-  #     overwrite: false            # true replaces entries that already exist
+  #     from-api: false             # true seeds from the live CDISC Library API instead of
+  #                                 # pickles; needs CDISC_API_KEY / cdisc.library.api.key and is
+  #                                 # mutually exclusive with from-dir
+  #     target-store:               # the store FILE to seed; blank = CDISC_METADATA_STORE /
+  #                                 # cdisc.metadata.store, else ~/.cumbaDataBrowser/
+  #                                 # metadata-cache.zip. This is also the store every validation
+  #                                 # run reads, and it outranks an ambient CDISC_METADATA_STORE,
+  #                                 # so seeding and validating cannot drift apart. It applies even
+  #                                 # with enabled: false, for a deployment that provisions the
+  #                                 # store out of band and only points at it.
+  #     refresh: false              # true re-acquires everything, ignoring what the store already
+  #                                 # holds; with false an existing store is left untouched and is
+  #                                 # not re-seeded at all
   cache-seed:
     enabled: false
   runs:

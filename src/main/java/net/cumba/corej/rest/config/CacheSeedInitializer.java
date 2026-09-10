@@ -3,13 +3,17 @@ package net.cumba.corej.rest.config;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import net.cumba.cdisc.library.api.client.CdiscLibraryClient;
+import java.time.Instant;
+import net.cumba.corej.core.CoreLibraryAccess;
 import net.cumba.corej.core.metadata.pickle.HttpArchivePickleSource;
 import net.cumba.corej.core.metadata.pickle.LocalPickleSource;
-import net.cumba.corej.core.metadata.pickle.PickleCacheSeeder;
 import net.cumba.corej.core.metadata.pickle.PickleSource;
-import net.cumba.corej.core.metadata.pickle.SeedOptions;
-import net.cumba.corej.core.metadata.pickle.SeedReport;
+import net.cumba.corej.core.metadata.store.StoreMetadataProviderFactory;
+import net.cumba.corej.core.metadata.store.seed.PickleStoreSeeder;
+import net.cumba.corej.core.metadata.store.seed.StoreSeedOptions;
+import net.cumba.corej.core.metadata.store.seed.StoreSeedReport;
+import net.cumba.corej.core.metadata.store.seed.WebApiStoreSeeder;
+import net.cumba.datatable.metadatacache.MetadataCacheLocator;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,19 +23,44 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
- * Seeds the CDISC Library web-api cache from the Python engine's pickle metadata at startup, so a
- * deployment without an API key still has library metadata available.
+ * Seeds the unified CDISC metadata store at startup — from the Python engine's pickle metadata
+ * ({@code PickleStoreSeeder}), or from the live CDISC Library API ({@code WebApiStoreSeeder},
+ * opt-in via {@code corej.cache-seed.from-api}, needs an API key) — so a deployment has library
+ * metadata available without any manual step.
  *
  * <p>
  * Opt-in via {@code corej.cache-seed.enabled}. There is deliberately <b>no HTTP endpoint</b>:
- * seeding performs outbound network I/O, writes to a server-side directory and can take minutes.
+ * seeding performs outbound network I/O, writes to a server-side file and can take minutes.
  * Exposing that to callers would be a privileged operation needing its own authorisation story, so
  * every input is server-configured instead.
  * </p>
  *
  * <p>
- * Failures are logged and swallowed. A metadata cache is an optimisation, not a precondition — a
- * network outage or an upstream layout change must not stop the service from starting.
+ * Failures are logged and swallowed. A metadata store is an optimisation, not a precondition — a
+ * network outage or an upstream layout change must not stop the service from starting. (A run
+ * without a store skips the library-dependent rules, ruling R2.)
+ * </p>
+ *
+ * <p>
+ * ⭐ When the engine has no store configured (neither {@code CDISC_METADATA_STORE} nor
+ * {@code cdisc.metadata.store}), the resolved target — the {@code target-store} property or the
+ * application default — is also <b>published into {@code cdisc.metadata.store}</b> once the store
+ * exists: the engine resolves the store through that property
+ * ({@code StoreMetadataProviderFactory.resolveConfiguredFile}) and cannot know this service's
+ * configuration itself. An explicitly configured environment/property is never overridden.
+ * </p>
+ *
+ * <p>
+ * ⚠⚠ That publication is <b>not</b> what makes an explicit {@code target-store} win (review finding
+ * F2): the system property is the <em>lowest</em> tier of {@code resolveConfiguredFile}, below
+ * {@code CDISC_METADATA_STORE}, and this method publishes nothing at all once anything else is
+ * configured — which is exactly how a deployment could seed {@code target-store=B} here and then
+ * validate against an ambient {@code CDISC_METADATA_STORE=A} forever, with no warning. What closes
+ * that is {@code StudyValidationCheckRunner.configuredRunStore}, which hands the same
+ * {@code target-store} to every run on {@code StudyValidationParams.metadataStore()} — the explicit
+ * top tier. The two are additive: the publication still serves the readers that have no params of
+ * their own (the product catalogue behind {@code /meta}) and the zero-configuration application
+ * default, which has no other channel. Do not delete either.
  * </p>
  */
 @Component
@@ -57,33 +86,61 @@ public class CacheSeedInitializer implements ApplicationRunner
     public void run(ApplicationArguments aArgs)
     {
         // Everything, including target resolution, sits inside the try: Path.of on a malformed
-        // target-dir throws InvalidPathException, and an unset user.home makes the fallback throw
-        // NPE. Both are unchecked and would otherwise escape run() and abort context startup —
+        // target-store throws InvalidPathException, and an unset user.home makes the fallback
+        // throw. Both are unchecked and would otherwise escape run() and abort context startup —
         // exactly what this class promises cannot happen.
-        try (PickleSource source = buildSource())
+        try
         {
-            Path target = resolveTargetDir();
-            if (!config.isOverwrite() && alreadySeeded(target))
+            if (config.isFromApi() && config.getFromDir() != null && !config.getFromDir().isBlank())
             {
-                LOG.info("CDISC Library cache at {} is already populated; skipping seeding "
-                        + "(set corej.cache-seed.overwrite=true to force)", target);
+                LOG.warn("corej.cache-seed.from-api and corej.cache-seed.from-dir are mutually "
+                        + "exclusive; skipping metadata store seeding");
                 return;
             }
-            LOG.info("Seeding CDISC Library cache at {} …", target);
-            SeedReport report = new PickleCacheSeeder()
-                    .seed(SeedOptions.builder(source, target, CdiscLibraryClient.getApiUrl())
-                            .overwriteExisting(config.isOverwrite()).build());
-            LOG.info("CDISC Library cache seeded: {}", report.summary());
-            report.warnings().forEach(w -> LOG.warn("  cache seed: {}", w));
+            Path target = resolveTargetStore();
+            if (!config.isRefresh() && Files.isRegularFile(target))
+            {
+                LOG.info("Metadata store at {} already exists; skipping seeding "
+                        + "(set corej.cache-seed.refresh=true to rebuild it)", target);
+                publishDefaultIfUnconfigured(target);
+                return;
+            }
+            LOG.info("Seeding metadata store at {} …", target);
+            StoreSeedOptions options = StoreSeedOptions.of(target).withRefresh(config.isRefresh())
+                    .withFetchedAt(Instant.now().toString());
+            StoreSeedReport report;
+            if (config.isFromApi())
+            {
+                CoreLibraryAccess access = CoreLibraryAccess.openIfConfigured().orElse(null);
+                if (access == null)
+                {
+                    LOG.warn("corej.cache-seed.from-api needs a CDISC Library API key "
+                            + "(CDISC_API_KEY / cdisc.library.api.key); skipping metadata store "
+                            + "seeding — configure a key, or seed from pickles instead");
+                    return;
+                }
+                report = new WebApiStoreSeeder(access).seed(options);
+            }
+            else
+            {
+                try (PickleSource source = buildSource())
+                {
+                    report = new PickleStoreSeeder(source).seed(options);
+                }
+            }
+            LOG.info("Metadata store seeded: {}", report.summary());
+            report.ctPackagesMissed().forEach(m -> LOG.warn("  store seed, missing: {}", m));
+            report.warnings().forEach(w -> LOG.warn("  store seed: {}", w));
+            publishDefaultIfUnconfigured(target);
         }
         catch (IOException | RuntimeException e)
         {
-            // Never fail startup: the cache is an optimisation, not a precondition. Catching both
+            // Never fail startup: the store is an optimisation, not a precondition. Catching both
             // the declared IOException and any unchecked failure covers every way seeding can go
             // wrong (unreachable host, malformed archive, unwritable target) without swallowing
             // Errors. Same idiom as the CLI's seedCache.
-            LOG.warn("CDISC Library cache seeding failed ({}); continuing without it",
-                    e.getMessage(), e);
+            LOG.warn("Metadata store seeding failed ({}); continuing without it", e.getMessage(),
+                    e);
         }
     }
 
@@ -103,44 +160,40 @@ public class CacheSeedInitializer implements ApplicationRunner
     }
 
 
-    private Path resolveTargetDir()
+    /**
+     * The store file to seed: the explicit {@code target-store} property, else the engine's own
+     * configuration ({@code CDISC_METADATA_STORE} before {@code cdisc.metadata.store} — the same
+     * order the engine reads), else the application default. Unlike a read, the target need not
+     * exist — seeding is what creates it.
+     */
+    private Path resolveTargetStore()
     {
-        String configured = config.getTargetDir();
+        String configured = config.getTargetStore();
         if (configured != null && !configured.isBlank())
         {
             return Path.of(configured).toAbsolutePath();
         }
-        // Delegate to the client's own resolver rather than re-implementing it: it checks the
-        // environment variable BEFORE the system property, and getting that order wrong would
-        // seed one directory while CdiscLibraryClient reads another.
-        String configuredCache = CdiscLibraryClient.retrieveSystemProperty(
-                CdiscLibraryClient.ENV_CDISC_API_CACHE, CdiscLibraryClient.SP_CDISC_API_CACHE);
-        if (configuredCache != null && !configuredCache.isBlank())
+        Path fromEnvironment = MetadataCacheLocator.configuredStore();
+        if (fromEnvironment != null)
         {
-            return Path.of(configuredCache).toAbsolutePath();
+            return fromEnvironment.toAbsolutePath();
         }
-        return Path.of(System.getProperty("user.home", "."), ".cdiscApiCache").toAbsolutePath();
+        return MetadataCacheLocator.defaultStore().toAbsolutePath();
     }
 
 
-    /** Whether the target already holds cache entries, so a re-seed would be pure overhead. */
-    private static boolean alreadySeeded(Path aTarget)
+    /**
+     * Publishes {@code aTarget} into {@code cdisc.metadata.store} when nothing outside configured a
+     * store and the file exists — see the class comment. An explicit configuration (environment
+     * variable or system property) always wins and is never touched.
+     */
+    private static void publishDefaultIfUnconfigured(Path aTarget)
     {
-        if (!Files.isDirectory(aTarget))
+        if (MetadataCacheLocator.configuredStore() == null && Files.isRegularFile(aTarget))
         {
-            return false;
-        }
-        try (java.util.stream.Stream<Path> files = Files.list(aTarget))
-        {
-            // Path.getFileName() is null for a root path; Objects.toString keeps that off the
-            // dereference path rather than relying on it never occurring.
-            return files.anyMatch(
-                    p -> java.util.Objects.toString(p.getFileName(), "").endsWith(".json.gz"));
-        }
-        catch (IOException e)
-        {
-            LOG.debug("could not inspect {}; assuming it needs seeding", aTarget, e);
-            return false;
+            System.setProperty(StoreMetadataProviderFactory.STORE_PROPERTY, aTarget.toString());
+            LOG.info("Published {} as {} for this process", aTarget,
+                    StoreMetadataProviderFactory.STORE_PROPERTY);
         }
     }
 
