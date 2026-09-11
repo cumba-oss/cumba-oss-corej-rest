@@ -40,11 +40,11 @@ services:
       # --- global run queue (corej.runs.max-parallel): extra runs queue as PENDING ---
       COREJ_RUNS_MAXPARALLEL: "${COREJ_RUNS_MAXPARALLEL:-2}"
       # --- "custom" data on the bind mount, so it survives image rebuilds.
-      #     ⚠⚠ THIS IMAGE SHIPS NO RULE CORPUS. The corpora are released separately
-      #     by cumba-oss-corej-rules and are not Maven dependencies, so the build has
-      #     nothing to bake. Unpack the two release assets into ./corej-data/rules
-      #     and ./corej-data/rules-define on the host; until then the service starts,
-      #     accepts requests and finds no packages. It says so once at startup. ---
+      #     ⭐ THE IMAGE SHIPS BOTH CORPORA (pinned and hash-verified at build time)
+      #     and seeds them into ./corej-data/rules and ./corej-data/rules-define on
+      #     first start, so this stack validates with no manual step. ⚠ Seeding is
+      #     skipped once a directory holds its own packages.json: unpack a different
+      #     corpus version's CONTENTS there and it wins permanently. ---
       COREJ_RULES_DIR: /app/data/rules
       COREJ_DEFINE_RULES_DIR: /app/data/rules-define
       # --- the unified CDISC metadata store: a single zip FILE, on the bind mount

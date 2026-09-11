@@ -50,7 +50,7 @@ set -euo pipefail
 # a missing `wc` exits 127 with NO message at all.
 #
 # curl is deliberately NOT in this list; it is genuinely optional (see http_get).
-for tool in cat env grep java ls mkdir mktemp rm seq sleep sort tail timeout wc; do
+for tool in cat env find grep java ls mkdir mktemp rm seq sleep sort tail timeout wc; do
     command -v "$tool" >/dev/null 2>&1 \
         || { echo "smoke: required tool not found: $tool" >&2; exit 1; }
 done
@@ -70,6 +70,30 @@ BUNDLE="$(cd "$BUNDLE" && pwd)"
 for d in rules rules-define dictionaries; do
     [ -d "$BUNDLE/$d" ] \
         || { echo "smoke: bundle is missing $d/ — see the DO-NOT-DELETE note in the .conf" >&2; exit 1; }
+done
+
+# ⛔ THE BUNDLED RULE CORPUS. rules/ and rules-define/ ship POPULATED since
+# 2026-09-11; before that they were empty by design and only had to exist, and a
+# service built from such a bundle started normally, accepted every request and
+# validated nothing.
+#
+# The manifest is asserted separately from the count on purpose: the engine resolves
+# rules THROUGH packages.json — /api/meta/run-options reads it directly — so a corpus
+# that lost it degrades to an empty package list, and a count alone passes straight
+# over that.
+#
+# ⚠ These floors are databrowser-meta/build_distribution.sh's MIN_CORE_RULES (28) and
+# MIN_DEFINE_PKGS (4), so the app and the clients move together. They are floors, not
+# counts — v0.3.1 stages 47 and 4 — and they are NOT the place to encode which
+# families shipped. The exact DRAFT-package ratchet lives in pom.xml, where the pin it
+# tracks lives; duplicating that number here would make it two places to bump.
+for corpus in "rules:rules-*.json:28" "rules-define:rules-define-*.json:4"; do
+    dir="${corpus%%:*}"; rest="${corpus#*:}"; glob="${rest%%:*}"; floor="${rest##*:}"
+    [ -f "$BUNDLE/$dir/packages.json" ] \
+        || { echo "smoke: $dir/packages.json is missing from the bundle — the engine resolves rules through that manifest, so this degrades to an empty package list rather than failing" >&2; exit 1; }
+    n="$(find "$BUNDLE/$dir" -maxdepth 1 -name "$glob" -type f | wc -l)"
+    [ "$n" -ge "$floor" ] \
+        || { echo "smoke: only $n $glob in $BUNDLE/$dir — expected at least $floor; the assembly staged the wrong path (it points through a version-bearing directory)" >&2; exit 1; }
 done
 
 # ⚠ config/ is checked separately and NOT pointed at the DO-NOT-DELETE note: that note
@@ -223,10 +247,47 @@ if grep -q '^bootstrap: ' "$log"; then
 fi
 [ -n "$body" ] || fail "no response from /api/info on port $port within 120s"
 
+# ⚠ MATCH THE FIELD, NOT A LOOSE SUBSTRING. InfoController.SERVICE is
+# "corej-cdisc-rest" here and "corej-rest" in the internal twin, and it is
+# deliberately NOT the artifactId (see the ⛔ note on ARTIFACT_ID in
+# InfoController). The loose form this replaces would also be satisfied by a payload
+# that merely mentions the name elsewhere — and porting it to the twin, where the
+# spelling differs, failed a perfectly good bundle (measured 2026-09-11).
 case "$body" in
-    *corej-cdisc-rest*) ;;
+    *'"service":"corej-cdisc-rest"'*) ;;
     *) fail "unexpected /api/info payload: $body" ;;
 esac
 
+# ⛔ THE CORPUS AS THE SERVICE SEES IT. The file checks above prove the corpus is in
+# the zip; this proves the RUNNING service, reading the directory its own .conf
+# resolved, offers those packages to a client. MetaController.packages() builds the
+# list from packages.json in StudyValidationService.effectiveRulesDir(), so the two
+# can genuinely disagree — a corpus staged into the bundle that the .conf does not
+# point at satisfies every file check and fails only here. Measured: sabotaging the
+# bundle's .conf that way leaves every check above green.
+#
+# ⚠ An empty list is the failure mode to catch, and it is well-formed JSON: the
+# endpoint answers 200 with "packages":[] on a service that can validate nothing,
+# so requiring the KEY would pass on exactly that. Anchor on the opening of a first
+# ELEMENT — "packages":[{ — which an empty array cannot produce.
+#
+# ⚠ Not a field name. Keying on a component of PackageOption is a second thing to
+# keep in step with the API; the array's own shape is not. (The internal twin's first
+# version required "shortName" and failed on a good bundle offering 47 packages —
+# that component serialises as "name".)
+# ⚠ A SEPARATE VARIABLE, not $body — the final banner below prints the /api/info
+# payload, and reusing $body here would make it print the run-options payload.
+opts=""
+if ! opts="$(http_get /api/meta/run-options)" || [ -z "$opts" ]; then
+    fail "no response from /api/meta/run-options on port $port"
+fi
+case "$opts" in
+    *'"packages":[{'*) ;;
+    *) fail "the service offers NO rule packages — rules/ reached the zip but the running service does not see a usable corpus there. /api/meta/run-options -> ${opts}" ;;
+esac
+
+pkgcount="$(printf '%s' "$opts" | grep -o '"ruleCount":' | wc -l)"
+
 echo "smoke: OK — $BUNDLE started on the externally-configured port $port"
 echo "smoke: /api/info -> $body"
+echo "smoke:      and /api/meta/run-options offers $pkgcount rule packages"

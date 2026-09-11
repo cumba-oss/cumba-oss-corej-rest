@@ -141,7 +141,8 @@ cumba-oss-corej-rest-<version>/
 ├── cumba-oss-corej-rest.conf    launcher + JVM configuration
 ├── run.sh   run.bat
 ├── config/application.yaml      external Spring configuration (overrides)
-├── rules/  rules-define/  dictionaries/    ship empty; each has a README
+├── rules/  rules-define/          the pinned corpus, shipped populated
+├── dictionaries/                ships empty; all three have a README
 └── lib/                         the application jar and every dependency
 ```
 
@@ -254,13 +255,50 @@ and **hyphens removed** — `corej.sessions.dir` is `COREJ_SESSIONS_DIR`, but
 `spring.application.name` is `corej-cdisc-rest` and the config prefix is `corej:`. Both are
 **deliberately not renamed** — they are wire- and ops-visible identifiers, not namespace tokens.
 
-## ⚠ The rule corpus is not in this repository
+## ⭐ The rule corpus is bundled
 
-The engine needs a **rule corpus on disk at runtime**. It is not a Maven dependency and is not
-vendored here — it is released separately, as signed archives, from
-[cumba-oss-corej-rules](https://github.com/cumba-oss/cumba-oss-corej-rules):
-`cumba-oss-corej-rules-<version>.zip` (data rule packages) and
-`cumba-oss-corej-rules-define-<version>.zip` (Define-XML packages).
+**`rules/` and `rules-define/` in the distribution bundle ship FULL**, so a freshly unzipped
+service offers rule packages immediately. Until 2026-09-11 both shipped empty with a README
+telling the operator to unzip a release asset in by hand — and until they did, the service
+started normally, accepted every request and validated nothing, with `/api/meta/run-options`
+offering an empty `packages` array.
+
+`download-corej-rules` in `pom.xml` fetches two assets of one pinned
+[cumba-oss-corej-rules](https://github.com/cumba-oss/cumba-oss-corej-rules) release at
+`generate-resources` — `cumba-oss-corej-rules-<version>.zip` (data rule packages) and
+`cumba-oss-corej-rules-define-<version>.zip` (Define-XML packages) — verifies each against its
+own `sha256`, and `src/assembly/dist.xml` stages them into the bundle. The corpus is still not
+a Maven dependency: the engine discovers packages through the directory's `packages.json`.
+
+⚠⚠ **Bumping the corpus is a five-repo change** — this repo, `cumba-oss-corej-cli`, the two
+internal twins and `cumba-data-browser` all pin `dependency.corej-rules.tag` and the two hashes.
+Bump the tag, the version and **both** hashes together, and re-measure
+`corej.rules.draft-packages`.
+
+⚠ The build (and a `docker build`) therefore needs access to `github.com` the first time a pin
+is used; afterwards `~/.m2/download-cache` serves it and `mvn -o` works.
+
+### What is in the corpus
+
+- **No CORE rule family.** Those rules are externally sourced and may not be redistributed as a
+  set. Consequence: **the bundled corpus has no TIG coverage** — the only TIG package outside
+  the CORE family is `rules-draft-tig-1-0`.
+- **The DRAFT family IS present, for now.** `v0.3.1` ships 47 packages, 15 of them
+  `rules-draft-*` — parked candidate rules, generated and tested but not promoted.
+
+### The guards
+
+`verify-corej-rules-staged` (antrun, `prepare-package`) counts what was unpacked and fails by
+name: `packages.json` present in each corpus, ≥ 28 `rules-*.json`, ≥ 4 `rules-define-*.json`, and
+**exactly** `corej.rules.draft-packages` DRAFT packages. `src/test/smoke.sh` then asserts the same
+files in the **assembled** bundle and requires the **running** service's `/api/meta/run-options`
+to offer a non-empty `packages` array.
+
+The three are deliberately different subjects, because the fileSets that join them point
+**through a version-bearing directory** (`cumba-oss-corej-rules-<version>/rules/`), and a wrong
+path there stages nothing at all, silently, with every gate green. Measured: a bundle whose
+`.conf` points away from its own staged corpus passes every file-level check and fails only the
+service-level one.
 
 ⛔ **The rules directory is *not* a `corej:` yaml key.** It is resolved by the engine, not by
 Spring, from `COREJ_RULES_DIR`, then the `corej.rules.dir` system property, then `./rules`.
@@ -275,8 +313,9 @@ three directories to `${env:COREJ_…:-${sys:<property>:-${bootstrap.dir}/<dir>}
 — the engine's documented precedence, but resolving against the bundle instead of the working
 directory of whatever supervises the service. ⚠ The `${sys:…}` level is not cosmetic: the
 launcher applies `[properties]` with an unconditional `System.setProperty`, so a two-level form
-would *overwrite* a `-D` the operator passed. Drop the corpus into the bundle's `rules/` (contents, not the archive's
-top-level directory) or point `COREJ_RULES_DIR` elsewhere, and restart.
+would *overwrite* a `-D` the operator passed. To run a **different** corpus version, point
+`COREJ_RULES_DIR` elsewhere, or replace the contents of the bundle's `rules/` (contents, not the
+archive's top-level directory) — see `rules/README.md` — and restart.
 
 ## Serving the SPA from this jar (`bundle-web`)
 
@@ -316,15 +355,17 @@ so sessions, reports, the rule corpora, the dictionary store and the unified CDI
 all stay on the host — `mkdir -p corej-data && sudo chown -R 1000:1000 corej-data` once, first.
 Copy `.env.example` to `.env` to change any of it.
 
+⭐ The image **does** ship both rule corpora, pinned and hash-verified at build time; the
+entrypoint seeds them into `corej-data/rules` and `corej-data/rules-define` on first start. ⚠
+Seeding is skipped once a directory holds its own `packages.json`, so a corpus you unpack there
+wins and is never overwritten.
+
 Three things the image deliberately does **not** carry, each announced once at startup rather than
 discovered per run:
 
 - **No SPA — the image is API-only.** `bundle-web` needs a pre-built SPA handed to it via
   `-Dweb.dist.dir`, and there is nothing here for a container build to inline. `/api` and
   `/swagger-ui.html` are what it serves.
-- **No rule corpus.** The corpora are released separately by `cumba-oss-corej-rules` and are not
-  Maven dependencies. Unpack the two release assets into `corej-data/rules` and
-  `corej-data/rules-define`.
 - **No dictionary installer.** The installer is the CLI, a separate repository. Run the
   `cumba-oss-corej-cli` image against the same `./corej-data`, or mount a licensed distribution at
   `/licensed-dictionaries/<type>`.

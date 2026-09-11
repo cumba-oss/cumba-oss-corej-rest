@@ -76,9 +76,9 @@ WORKDIR /app
 # The exploded dist bundle: cumba-oss-corej-rest.jar (the cumba-oss-bootstrap
 # launcher) and its sidecar .conf, flat lib/, run.sh, config/ (the external
 # application.yaml the .conf points spring.config.additional-location at), and the
-# three EMPTY store directories the bundle ships (rules/ rules-define/
-# dictionaries/, each holding a README that says what belongs there). Those
-# empties are load-bearing — see below.
+# three store directories the bundle ships — rules/ and rules-define/ POPULATED
+# with the pinned corpus, dictionaries/ empty, each holding a README. Their
+# existence is load-bearing even when empty — see below.
 COPY --from=build /build/out /app/dist
 
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
@@ -97,17 +97,27 @@ COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 # user). These subdirs are created here so they exist in the image layer; the
 # entrypoint re-creates them at startup against whatever is mounted.
 #
-# ⚠⚠ None of the rule directories ships with content. The corpora are released on
-# their own cadence by cumba-oss-corej-rules and are not Maven dependencies, so
-# this image cannot bake them — there is no module here to copy from. The operator
-# supplies them; the entrypoint says so once.
+# ⭐ THE RULE CORPORA DO SHIP, since 2026-09-11: the build stage fetches them from a
+# pinned, hash-verified cumba-oss-corej-rules release (see download-corej-rules in
+# pom.xml) and the assembly stages them into the bundle COPYed above, from where the
+# entrypoint seeds them onto this volume — if absent, never overwriting a corpus the
+# operator put there. They are still not Maven artifacts and are still released on
+# their own cadence; the pin is what reconciles the two, and bumping it is a
+# five-repo change (this repo, cumba-oss-corej-cli, the two internal twins and
+# cumba-data-browser).
+#
+# ⚠ The build stage therefore needs network access to github.com. A fully offline
+# `docker build` works only against a warm ~/.m2/download-cache.
+#
+# ⚠ The DICTIONARY store still ships empty: those sets are licensed separately and
+# are never redistributed here.
 #
 # ⚠⚠ "Configured but MISSING" is a hard error for two of the three: the dictionary
 # store throws when a validation run sets up, and the Define-XML corpus throws on
 # every conformance run. Only rules/ treats missing and empty alike. That is why
 # these directories are created here and why the entrypoint falls back to the
-# bundle's own empty copies rather than leaving a dangling path. An EMPTY store
-# degrades to a loud per-rule SKIP; a MISSING one throws.
+# bundle's own copies rather than leaving a dangling path. An EMPTY store degrades
+# to a loud per-rule SKIP; a MISSING one throws.
 #
 # ⚠ No /app/data/api-cache: the CDISC Library web-API cache it held is retired and
 # read by nothing here. Baking it back in would also make the entrypoint's

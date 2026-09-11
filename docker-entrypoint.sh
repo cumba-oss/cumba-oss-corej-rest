@@ -17,32 +17,47 @@ set -eu
 # The rule corpora.
 #
 # ⚠⚠ THIS IMAGE SHIPS NONE. The corpora are released on their own cadence by
-# cumba-oss-corej-rules and are not Maven dependencies, so there is nothing in this
-# repository for the build to bake. The bundle's own rules/ and rules-define/ ship
-# EMPTY, each with a README naming the release asset that belongs there.
+# cumba-oss-corej-rules and are not Maven dependencies — but since 2026-09-11 THE
+# IMAGE SHIPS BOTH: the build stage fetches them from a pinned, hash-verified
+# release and the assembly stages them into the bundle, so /app/dist/rules and
+# /app/dist/rules-define are populated and the blocks below seed them onto the
+# volume. Before that both were EMPTY and only their READMEs were mirrored, so a
+# fresh container offered no rule packages at all.
+#
+# ⚠⚠ SEED IF ABSENT, NEVER OVERWRITE — the packages.json test in each block is what
+# makes this safe. These targets are on a VOLUME that outlives the container, and an
+# operator may well have put a different corpus version there; an unconditional
+# `cp -a` would overwrite it on every single start. It was unconditional while the
+# bundle's copies were empty directories and there was nothing to clobber. Now there
+# is. A corpus already present therefore WINS over the bundled one, which is also the
+# right precedence: it is the operator's explicit act.
 #
 # ⚠⚠ Empty and missing are NOT the same to the engine: a configured-but-missing
 # Define-XML corpus throws on every conformance run, and a missing dictionary store
 # throws when a run sets up. Only rules/ treats missing and empty alike. So each
-# block falls back to the bundle's own empty copy rather than leaving a dangling
-# path.
+# block still guarantees its directory EXISTS and falls back to the bundle's own copy
+# rather than leaving a dangling path.
 # ------------------------------------------------------------------
 RULES_DIR="${COREJ_RULES_DIR:-/app/data/rules}"
 if mkdir -p "$RULES_DIR" 2>/dev/null \
-    && cp -a /app/dist/rules/. "$RULES_DIR"/ 2>/dev/null; then :; else
+    && { [ -f "$RULES_DIR/packages.json" ] \
+         || [ ! -d /app/dist/rules ] \
+         || cp -a /app/dist/rules/. "$RULES_DIR"/ 2>/dev/null; }; then :; else
     echo "warning: could not prepare the rule corpus directory $RULES_DIR;" \
-        "using the bundle's own (empty) /app/dist/rules" >&2
+        "using the bundle's own /app/dist/rules" >&2
     RULES_DIR=/app/dist/rules
 fi
 export COREJ_RULES_DIR="$RULES_DIR"
 
 DEFINE_RULES_DIR="${COREJ_DEFINE_RULES_DIR:-/app/data/rules-define}"
 if mkdir -p "$DEFINE_RULES_DIR" 2>/dev/null \
-    && cp -a /app/dist/rules-define/. "$DEFINE_RULES_DIR"/ 2>/dev/null; then
+    && { [ -f "$DEFINE_RULES_DIR/packages.json" ] \
+         || [ ! -d /app/dist/rules-define ] \
+         || cp -a /app/dist/rules-define/. "$DEFINE_RULES_DIR"/ 2>/dev/null; }; then
     export COREJ_DEFINE_RULES_DIR="$DEFINE_RULES_DIR"
 else
     echo "warning: could not prepare the Define-XML corpus directory" \
-        "$DEFINE_RULES_DIR; conformance runs will use the bundle's own (empty)" \
+        "$DEFINE_RULES_DIR; conformance runs will use the bundle's own" \
         "/app/dist/rules-define" >&2
     export COREJ_DEFINE_RULES_DIR=/app/dist/rules-define
 fi
@@ -180,16 +195,19 @@ fi
 # run, buried in a report. Say it once at startup, where `docker compose logs`
 # shows it. packages.json is the manifest every generated corpus has.
 if [ ! -f "$COREJ_RULES_DIR/packages.json" ]; then
-    echo "notice: no rule corpus in $COREJ_RULES_DIR (no packages.json) — this image" \
-        "ships none. Take the matching cumba-oss-corej-rules release asset and unpack" \
-        "its CONTENTS there, so the directory holds packages.json and rules-*.json" \
-        "directly. Under the compose stack that is ./corej-data/rules on the host." >&2
+    echo "notice: no rule corpus in $COREJ_RULES_DIR (no packages.json). This image" \
+        "SHIPS one at /app/dist/rules and seeds it here on start, so something" \
+        "prevented that — usually a read-only mount, or a directory holding a" \
+        "partial corpus. Unpack a corpus's CONTENTS there so the directory holds" \
+        "packages.json and rules-*.json directly. Under the compose stack that is" \
+        "./corej-data/rules on the host." >&2
 fi
 if [ ! -f "$COREJ_DEFINE_RULES_DIR/packages.json" ]; then
     echo "notice: no Define-XML corpus in $COREJ_DEFINE_RULES_DIR (no packages.json)" \
-        "— Define-XML conformance will find no rules. It is a SEPARATE release asset" \
-        "from the data corpus above; under the compose stack unpack its contents into" \
-        "./corej-data/rules-define on the host." >&2
+        "— Define-XML conformance will find no rules. This image SHIPS one at" \
+        "/app/dist/rules-define and seeds it here on start, so something prevented" \
+        "that. It is a SEPARATE release asset from the data corpus above; under the" \
+        "compose stack unpack its contents into ./corej-data/rules-define." >&2
 fi
 
 # The metadata store, same surface. ⚠ Suppressed when the migration notice above

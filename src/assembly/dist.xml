@@ -9,7 +9,9 @@
         ├── cumba-oss-corej-rest.conf    its sidecar config — editable after unzip
         ├── run.sh   run.bat
         ├── config/                     external Spring config (application.yaml)
-        ├── rules/  rules-define/  dictionaries/   (empty; each with a README)
+        ├── rules/           the pinned rule corpus, staged from the download
+        ├── rules-define/    the pinned Define-XML corpus, likewise
+        ├── dictionaries/    EMPTY; its README names the install route
         └── lib/                        this project's jar + every runtime dependency
 
     ⭐ The launcher jar and the .conf MUST share a basename: the launcher strips
@@ -97,17 +99,29 @@
 
     <fileSets>
         <!--
-            The three on-disk stores the engine resolves for itself, shipped EMPTY apart
-            from a README that says what goes in them and where to get it.
+            The three on-disk stores the engine resolves for itself.
 
-            ⚠ They are shipped rather than omitted because the .conf configures all
-            three unconditionally, and "configured but missing" is a hard error for two
-            of them: the dictionary store throws when a validation run sets up (not at
-            process startup — the service still starts), and the Define-XML corpus
+            ⭐ rules/ AND rules-define/ NOW SHIP POPULATED (2026-09-11). Each is the README
+            below PLUS the corpus staged from the pinned download — see download-corej-rules
+            in pom.xml. Before that both shipped empty and the operator had to unzip a release
+            asset in by hand, which meant a freshly unzipped service started normally, accepted
+            every request and validated nothing. dictionaries/ still ships empty: those sets
+            are licensed separately and are installed by the operator.
+
+            ⚠⚠ THE CORPUS fileSets POINT THROUGH A VERSION-BEARING DIRECTORY. The archives
+            unpack to cumba-oss-corej-rules-<version>/rules/..., so ${dependency.corej-rules.version}
+            appears in the path below. Get it wrong — which a version bump is exactly the thing
+            that does — and the assembly stages NOTHING, silently, with every gate green. The
+            antrun guard verify-corej-rules-staged in pom.xml and src/test/smoke.sh both exist
+            to make that loud; they check the download and the assembled bundle respectively.
+
+            ⚠ All three directories are shipped rather than omitted, populated or not, because
+            the .conf configures all three unconditionally, and "configured but missing" is a
+            hard error for two of them: the dictionary store throws when a validation run sets
+            up (not at process startup — the service still starts), and the Define-XML corpus
             throws on every conformance run. Only rules/ treats missing and empty alike.
-            On top of that, an existing empty directory is what makes the "put the corpus
-            here" instruction land somewhere visible in the unzipped bundle. Same for config/: an operator has to be able
-            to see that the override file exists before they need it.
+            Same for config/: an operator has to be able to see that the override file exists
+            before they need it.
         -->
         <!--
             External Spring configuration. `spring.config.additional-location` in the
@@ -124,7 +138,15 @@
             <outputDirectory>rules</outputDirectory>
         </fileSet>
         <fileSet>
+            <directory>${project.build.directory}/corej-rules/cumba-oss-corej-rules-${dependency.corej-rules.version}/rules</directory>
+            <outputDirectory>rules</outputDirectory>
+        </fileSet>
+        <fileSet>
             <directory>src/main/dist/rules-define</directory>
+            <outputDirectory>rules-define</outputDirectory>
+        </fileSet>
+        <fileSet>
+            <directory>${project.build.directory}/corej-rules-define/cumba-oss-corej-rules-define-${dependency.corej-rules.version}/rules-define</directory>
             <outputDirectory>rules-define</outputDirectory>
         </fileSet>
         <fileSet>

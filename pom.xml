@@ -108,6 +108,56 @@
         <dependency.pyrolite.version>1.5</dependency.pyrolite.version>
         <dependency.commons-compress.version>1.28.0</dependency.commons-compress.version>
         <dependency.poi.version>5.5.1</dependency.poi.version>
+        <!--
+            The pinned, hash-verified rule corpus this bundle ships in rules/.
+            download-corej-rules below fetches the release asset at generate-resources and
+            src/assembly/dist.xml stages it; before 2026-09-11 rules/ shipped EMPTY with a
+            README telling the operator to unzip it in by hand, and until they did the service
+            started normally, accepted every request and validated nothing.
+
+            ⭐ ONE CORPUS EVERYWHERE. This is the public corpus, which the internal
+            cumba-corej-rest, cumba-corej-cli, cumba-oss-corej-cli and the cumba data browser
+            all pin too — so no distributable bundle can acquire the unredistributable CORE
+            rule family by accident, and all five answer identically for the same study. Owner
+            ruling 2026-09-11 — databrowser-meta/plans/PLAN-bundle-rule-corpus-clients.md §D1.
+
+            ⚠ The corpus is NOT on the classpath and is NOT a Maven artifact: the engine
+            discovers packages through the directory's packages.json. Bump tag, version and
+            sha256 together or the download fails its integrity check.
+
+            ⚠ dependency.corej-rules.* has no `cumba-` prefix and no `.version` suffix on the
+            tag/sha256. That is the ONLY reason databrowser-meta's check_versions.sh does not
+            read it as a submodule pin and try to rewrite it. Do not rename these.
+
+            ⚠⚠ FIVE poms carry these four properties — cumba-data-browser plus the four
+            client bundles — and they must agree, or the app and the clients validate the same
+            study against different rules. check_versions.sh asserts both the agreement and
+            that it found five.
+        -->
+        <dependency.corej-rules.tag>v0.3.1</dependency.corej-rules.tag>
+        <dependency.corej-rules.version>0.3.1</dependency.corej-rules.version>
+        <!--
+            How many rules-draft-*.json the PINNED release ships. Asserted by exact equality in
+            verify-corej-rules-staged, so a change in the corpus's release scope cannot pass
+            unnoticed in either direction.
+
+            ⭐ 15 for v0.3.1, measured. It becomes 0 when cumba-oss-corej-rules cuts the
+            DRAFT-free tag that PLAN-unship-draft-rules.md Phase 3 is waiting on — bump this and
+            dependency.corej-rules.tag together.
+        -->
+        <corej.rules.draft-packages>15</corej.rules.draft-packages>
+        <dependency.corej-rules.sha256>6ca106c26dd24c82b7a47fb4dc39e87200f92df1aa316e2de8dce1929709b742</dependency.corej-rules.sha256>
+        <!--
+            The Define-XML conformance corpus: a SECOND asset of the SAME release, hence no
+            tag or version of its own, only its own hash.
+
+            ⚠⚠ Bumping dependency.corej-rules.tag/.version invalidates THIS hash too —
+            update both in one edit or the second download fails its integrity check. The two
+            are separate archives upstream because their keys differ: the data corpus is keyed
+            (family, standard, version), this one (family, version), since for Define-XML the
+            standard is always Define-XML.
+        -->
+        <dependency.corej-rules-define.sha256>1f359c2c8b25ae6c572da32fef3473f41c25503a5be1c368290740415fe7b802</dependency.corej-rules-define.sha256>
         <!-- jackson-annotations is released a patch digit behind the rest of
              Jackson (2.21, not 2.21.3); see dependencyManagement note below. -->
         <dependency.jackson-annotations.version>2.22</dependency.jackson-annotations.version>
@@ -129,6 +179,8 @@
         <plugin.license-maven-plugin.version>2.7.1</plugin.license-maven-plugin.version>
         <plugin.maven-compiler-plugin.version>3.16.0</plugin.maven-compiler-plugin.version>
         <plugin.maven-dependency-plugin.version>3.11.0</plugin.maven-dependency-plugin.version>
+        <plugin.download-maven-plugin.version>1.13.0</plugin.download-maven-plugin.version>
+        <plugin.maven-antrun-plugin.version>3.2.0</plugin.maven-antrun-plugin.version>
         <plugin.maven-assembly-plugin.version>3.8.0</plugin.maven-assembly-plugin.version>
         <plugin.maven-jar-plugin.version>3.5.1</plugin.maven-jar-plugin.version>
         <plugin.maven-clean-plugin.version>3.5.0</plugin.maven-clean-plugin.version>
@@ -2429,6 +2481,166 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
+            </plugin>
+
+            <!--
+                The rule corpus this bundle ships. Two assets of ONE pinned release, fetched
+                and unpacked under target/, from where src/assembly/dist.xml stages them into
+                the bundle's rules/ and rules-define/.
+
+                Mechanism copied from cumba-databrowser-launch's pom, so the data browser and
+                the four client bundles acquire their corpus exactly the same way.
+
+                ⚠ <sha256> is what makes this a pin rather than a download: a replaced release
+                asset — and a GitHub release asset CAN be replaced in place — fails the build
+                instead of silently changing what this bundle validates against.
+
+                ⚠ The download is cached under ~/.m2/download-cache, so `clean` does not
+                re-fetch and `mvn -o` builds off the cache. The FIRST build of a new pin needs
+                network, which is new for this repository's CI: both workflows must be able to
+                reach github.com.
+
+                ⚠ generate-resources, not prepare-package: the corpus is then on disk before
+                `test`, so a test (and src/test/smoke.sh's assembled-bundle checks) can read the
+                very tree the assembly will stage. The assembly itself runs at `package`, so
+                anything earlier would do.
+
+                ⚠ Declared in the module's global <plugins> deliberately. The launch module has
+                to hide this plugin inside its platform profiles because it ALSO drives the JRE
+                download there, whose ${jre.download.url} exists only in those profiles; this
+                repo has no platform profiles and no JRE, so that trap does not apply here.
+            -->
+            <plugin>
+                <groupId>com.googlecode.maven-download-plugin</groupId>
+                <artifactId>download-maven-plugin</artifactId>
+                <version>${plugin.download-maven-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>download-corej-rules</id>
+                        <phase>generate-resources</phase>
+                        <goals><goal>wget</goal></goals>
+                        <configuration>
+                            <url>https://github.com/cumba-oss/cumba-oss-corej-rules/releases/download/${dependency.corej-rules.tag}/cumba-oss-corej-rules-${dependency.corej-rules.version}.zip</url>
+                            <sha256>${dependency.corej-rules.sha256}</sha256>
+                            <unpack>true</unpack>
+                            <outputDirectory>${project.build.directory}/corej-rules</outputDirectory>
+                            <cacheDirectory>${user.home}/.m2/download-cache</cacheDirectory>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>download-corej-rules-define</id>
+                        <phase>generate-resources</phase>
+                        <goals><goal>wget</goal></goals>
+                        <configuration>
+                            <url>https://github.com/cumba-oss/cumba-oss-corej-rules/releases/download/${dependency.corej-rules.tag}/cumba-oss-corej-rules-define-${dependency.corej-rules.version}.zip</url>
+                            <sha256>${dependency.corej-rules-define.sha256}</sha256>
+                            <unpack>true</unpack>
+                            <outputDirectory>${project.build.directory}/corej-rules-define</outputDirectory>
+                            <cacheDirectory>${user.home}/.m2/download-cache</cacheDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!--
+                ⛔ THE NON-VACUITY GUARD ON THE CORPUS. Do not remove it, and do not lower a
+                floor to make a build pass.
+
+                Both unpacked archives carry a VERSION-BEARING top-level directory
+                (cumba-oss-corej-rules-<version>/rules/...), and the assembly's fileSets point
+                THROUGH it. A wrong path there — which is what a version bump most easily
+                breaks — makes the assembly emit an EMPTY rules/ with every gate still green,
+                and the failure surfaces only when an operator runs a validation and is told
+                there are no rule packages. That is this stack's signature defect: the check
+                that quietly stops checking.
+
+                So: count what was unpacked, and fail by name. This runs against the DOWNLOAD;
+                src/test/smoke.sh makes the matching assertion against the ASSEMBLED bundle and
+                against the RUNNING service, and the three are deliberately not one check.
+
+                The floors are databrowser-meta/build_distribution.sh's MIN_CORE_RULES (28)
+                and MIN_DEFINE_PKGS (4), so the app and the clients move together. They are
+                FLOORS, not counts: v0.3.1 holds 47 data packages and 4 Define-XML packages.
+
+                ⚠ MIN_CORE_RULES fell 40 -> 28 once, and the corpus did NOT shrink — the DRAFT
+                family stopped being RELEASED (15 packages), while staying generated and
+                tested upstream. A lower floor alone cannot tell "the release scope shrank"
+                from "the corpus rotted", which is why the draft assertion below is an exact
+                equality rather than a second floor.
+
+                ⭐⭐ THE DRAFT COUNT IS A RATCHET, NOT A CEILING, AND THE NUMBER IS NOT ZERO.
+                build_distribution.sh asserts MAX_DRAFT_PKGS=0 over the data browser's STAGED
+                PLATFORM ARCHIVES, and that assertion is a deliberate BLOCKER: it stops the
+                distribution build until cumba-oss-corej-rules cuts a DRAFT-free tag
+                (databrowser-meta/plans/PLAN-unship-draft-rules.md, Phase 3, the owner's tag to
+                cut). This assertion has a different subject — what the PINNED RELEASE ASSET
+                actually contains — and v0.3.1, the tag pinned above and by the data browser,
+                still ships all 15 DRAFT packages. The DRAFT-free corpus exists only in the
+                unreleased 0.3.2-SNAPSHOT.
+
+                So this is written as an exact equality against the measured truth. Bumping the
+                tag to the DRAFT-free release turns the build RED and forces this number to 0
+                in the same edit — the guard cannot silently pass over a changed release scope
+                in EITHER direction, which a `<= 15` ceiling would. Same shape as
+                databrowser-meta/check_plans.py's exact-equality ratchet.
+
+                ⛔ Do not "fix" a red here by widening the comparison. Either the release
+                changed (edit the number, deliberately) or the download is not the pinned asset
+                (fix that instead).
+
+                ⚠ packages.json is asserted separately from the package count. The engine
+                resolves rules THROUGH that manifest — /api/meta/run-options reads it directly
+                — so a corpus without it fails only at runtime; a count alone would pass over
+                it.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>${plugin.maven-antrun-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>verify-corej-rules-staged</id>
+                        <phase>prepare-package</phase>
+                        <goals><goal>run</goal></goals>
+                        <configuration>
+                            <target>
+                                <property name="corej.rules.unpacked"
+                                    value="${project.build.directory}/corej-rules/cumba-oss-corej-rules-${dependency.corej-rules.version}/rules"/>
+                                <property name="corej.define.unpacked"
+                                    value="${project.build.directory}/corej-rules-define/cumba-oss-corej-rules-define-${dependency.corej-rules.version}/rules-define"/>
+
+                                <fail message="corej rule corpus: ${corej.rules.unpacked}/packages.json is missing — the engine resolves rules through that manifest, so a corpus without it fails only at run time.">
+                                    <condition><not><available file="${corej.rules.unpacked}/packages.json"/></not></condition>
+                                </fail>
+                                <fail message="corej rule corpus: fewer than 28 rules-*.json under ${corej.rules.unpacked} — the download unpacked to an unexpected layout (the archive's top directory carries the version), or the release is not the one pinned.">
+                                    <condition><not>
+                                        <resourcecount when="ge" count="28">
+                                            <fileset dir="${corej.rules.unpacked}" includes="rules-*.json"/>
+                                        </resourcecount>
+                                    </not></condition>
+                                </fail>
+                                <fail message="corej rule corpus: the number of rules-draft-*.json under ${corej.rules.unpacked} is not ${corej.rules.draft-packages}, the count release ${dependency.corej-rules.tag} is known to ship. This is a ratchet, not a ceiling: if the release scope changed (a DRAFT-free tag would make this 0), set corej.rules.draft-packages to the new measured count in the same edit as the tag bump. If it did not, the download is not the pinned asset.">
+                                    <condition><not>
+                                        <resourcecount when="eq" count="${corej.rules.draft-packages}">
+                                            <fileset dir="${corej.rules.unpacked}" includes="rules-draft-*.json"/>
+                                        </resourcecount>
+                                    </not></condition>
+                                </fail>
+
+                                <fail message="corej Define-XML corpus: ${corej.define.unpacked}/packages.json is missing.">
+                                    <condition><not><available file="${corej.define.unpacked}/packages.json"/></not></condition>
+                                </fail>
+                                <fail message="corej Define-XML corpus: fewer than 4 rules-define-*.json under ${corej.define.unpacked} — the floor is CDISC and PMDA x Define-XML 2.0 and 2.1.">
+                                    <condition><not>
+                                        <resourcecount when="ge" count="4">
+                                            <fileset dir="${corej.define.unpacked}" includes="rules-define-*.json"/>
+                                        </resourcecount>
+                                    </not></condition>
+                                </fail>
+                            </target>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
 
             <!--
