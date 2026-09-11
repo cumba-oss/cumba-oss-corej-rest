@@ -2603,6 +2603,16 @@
                         <phase>prepare-package</phase>
                         <goals><goal>run</goal></goals>
                         <configuration>
+                            <!--
+                                ⛔ UN-SKIPPABLE ON PURPOSE. A `-D` only supplies the DEFAULT for
+                                an unconfigured plugin parameter, so without this line
+                                `-Dmaven.antrun.skip=true` silently disables this guard and
+                                `mvn package` still emits a zip — on a local build and in the
+                                Docker build stage, neither of which has smoke.sh as a second
+                                net. Setting it explicitly makes the command line powerless
+                                over it, which is what the ⛔ above already implies.
+                            -->
+                            <skip>false</skip>
                             <target>
                                 <property name="corej.rules.unpacked"
                                     value="${project.build.directory}/corej-rules/cumba-oss-corej-rules-${dependency.corej-rules.version}/rules"/>

@@ -286,7 +286,11 @@ case "$opts" in
     *) fail "the service offers NO rule packages — rules/ reached the zip but the running service does not see a usable corpus there. /api/meta/run-options -> ${opts}" ;;
 esac
 
-pkgcount="$(printf '%s' "$opts" | grep -o '"ruleCount":' | wc -l)"
+# ⚠ `|| true`: under `set -euo pipefail` a grep that matches nothing exits 1, pipefail
+# propagates it, and the assignment fails — the script would then exit 1 printing
+# NOTHING, after every real assertion had passed. This count is a cosmetic banner
+# number; it must never be able to fail the test.
+pkgcount="$(printf '%s' "$opts" | grep -o '"ruleCount":' | wc -l)" || true
 
 echo "smoke: OK — $BUNDLE started on the externally-configured port $port"
 echo "smoke: /api/info -> $body"

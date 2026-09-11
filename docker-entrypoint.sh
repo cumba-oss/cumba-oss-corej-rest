@@ -3,10 +3,11 @@
 #
 # "Custom" data — the rule corpora, the dictionary store and the unified CDISC
 # metadata store — lives on the persistent volume mounted at /app/data, so it
-# survives image rebuilds. Every block below guarantees its directory EXISTS,
-# mirrors the bundle's own (empty) copy into it so the "put the corpus here"
-# READMEs land where the operator will look, says once which stores are empty or
-# absent, and then launches the service.
+# survives image rebuilds. Every block below guarantees its directory EXISTS, SEEDS
+# the bundle's own copy into it — which since 2026-09-11 is the pinned rule corpus
+# rather than a README beside an empty directory, and which is skipped if the target
+# already holds a corpus of its own — says once which stores are empty or absent, and
+# then launches the service.
 #
 # ⚠⚠ The metadata store is the exception: it is a single zip FILE, only its PARENT
 # DIRECTORY is created, and an ABSENT store is the good degradation. See its block
@@ -16,9 +17,9 @@ set -eu
 # ------------------------------------------------------------------
 # The rule corpora.
 #
-# ⚠⚠ THIS IMAGE SHIPS NONE. The corpora are released on their own cadence by
-# cumba-oss-corej-rules and are not Maven dependencies — but since 2026-09-11 THE
-# IMAGE SHIPS BOTH: the build stage fetches them from a pinned, hash-verified
+# ⭐ THE IMAGE SHIPS BOTH, since 2026-09-11. The corpora are still released on their
+# own cadence by cumba-oss-corej-rules and are still not Maven dependencies — the pin
+# is what reconciles that with shipping them: the build stage fetches them from a pinned, hash-verified
 # release and the assembly stages them into the bundle, so /app/dist/rules and
 # /app/dist/rules-define are populated and the blocks below seed them onto the
 # volume. Before that both were EMPTY and only their READMEs were mirrored, so a
