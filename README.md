@@ -271,7 +271,7 @@ own `sha256`, and `src/assembly/dist.xml` stages them into the bundle. The corpu
 a Maven dependency: the engine discovers packages through the directory's `packages.json`.
 
 ⚠⚠ **Bumping the corpus is a five-repo change** — this repo, `cumba-oss-corej-cli`, the two
-internal twins and `cumba-data-browser` all pin `dependency.corej-rules.tag` and the two hashes.
+internal twins and `cumba-databrowser` all pin `dependency.corej-rules.tag` and the two hashes.
 Bump the tag, the version and **both** hashes together, and re-measure
 `corej.rules.draft-packages`.
 

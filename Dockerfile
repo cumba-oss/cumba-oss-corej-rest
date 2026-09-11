@@ -104,7 +104,7 @@ COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 # operator put there. They are still not Maven artifacts and are still released on
 # their own cadence; the pin is what reconciles the two, and bumping it is a
 # five-repo change (this repo, cumba-oss-corej-cli, the two internal twins and
-# cumba-data-browser).
+# cumba-databrowser).
 #
 # ⚠ The build stage therefore needs network access to github.com. A fully offline
 # `docker build` works only against a warm ~/.m2/download-cache.

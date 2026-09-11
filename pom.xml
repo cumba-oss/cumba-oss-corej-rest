@@ -129,7 +129,7 @@
             tag/sha256. That is the ONLY reason databrowser-meta's check_versions.sh does not
             read it as a submodule pin and try to rewrite it. Do not rename these.
 
-            ⚠⚠ FIVE poms carry these four properties — cumba-data-browser plus the four
+            ⚠⚠ FIVE poms carry these four properties — cumba-databrowser plus the four
             client bundles — and they must agree, or the app and the clients validate the same
             study against different rules. check_versions.sh asserts both the agreement and
             that it found five.
@@ -2168,7 +2168,7 @@
 
                     ⭐ Note this differs from the INTERNAL stack, where the pin
                     is additionally blocked by one file (ChatHtmlWriter.java in
-                    cumba-data-browser) that no JDT tried there could format:
+                    cumba-databrowser) that no JDT tried there could format:
                     not 4.39, not 4.40, not 4.41. No such blocker exists here.
 
                     So on this side 4.39 is genuinely available. It is NOT taken
