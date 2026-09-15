@@ -122,7 +122,16 @@ jobs:
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
           else
-            VERSION="0.1.0-SNAPSHOT"
+            # ⛔ Read the dev version from the pom; do NOT hardcode it. This line said
+            # 0.1.0-SNAPSHOT in all eight repos, which stopped being any repo's dev
+            # version the first time a line moved on -- so this lane gated a version
+            # unrelated to the one it was building. The comment above already claimed
+            # the pom default was being used; now it is. Matches the Gitea workflow.
+            VERSION="$(sed -n 's:.*<revision>\(.*\)</revision>.*:\1:p' pom.xml | head -1)"
+            if [[ -z "$VERSION" || "$VERSION" != *-SNAPSHOT ]]; then
+                echo "::error::pom.xml <revision> is '$VERSION' - expected a -SNAPSHOT dev version." >&2
+                exit 1
+            fi
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Building version: $VERSION"
