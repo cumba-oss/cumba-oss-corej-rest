@@ -88,10 +88,10 @@ don't assume re-downloading a tag returns the same bytes.
 Java 25, Maven 3.9.12+.
 
 ```bash
-mvn -B clean install -Drevision=0.1.0-SNAPSHOT
+mvn -B clean install -Drevision=0.2.0-SNAPSHOT
 ```
 
-`0.1.0-SNAPSHOT` is the current `<revision>` and also its fallback value in the pom, so
+`0.2.0-SNAPSHOT` is the current `<revision>` and also its fallback value in the pom, so
 `-Drevision=…` may be omitted locally; CI always passes it explicitly.
 
 ### ⚠ A plain `mvn verify` is not the CI gate
@@ -110,8 +110,8 @@ failing on them:
 To run what CI runs — the `MAVEN_CI_GATES` value from both workflow files:
 
 ```bash
-mvn -B spotless:check -Drevision=0.1.0-SNAPSHOT
-mvn -B clean install -Drevision=0.1.0-SNAPSHOT \
+mvn -B spotless:check -Drevision=0.2.0-SNAPSHOT
+mvn -B clean install -Drevision=0.2.0-SNAPSHOT \
     -Dmaven.compiler.failOnWarning=true -Dspotless.check=true \
     -Dpmd.failOnViolation=true -Dspotbugs.failOnError=true
 ```
@@ -223,7 +223,7 @@ request; tune both per deployment.
 To dump the OpenAPI document to `target/openapi.json` (starts the app, dumps, stops it):
 
 ```bash
-mvn -B -Pgenerate-openapi verify -Drevision=0.1.0-SNAPSHOT
+mvn -B -Pgenerate-openapi verify -Drevision=0.2.0-SNAPSHOT
 ```
 
 ⚠ Neither plugin in that profile is version-pinned, so the dump resolves whatever plugin release
@@ -326,7 +326,7 @@ CORS configuration is needed:
 
 ```bash
 unzip cumba-oss-corej-web-<version>.zip -d ./web-dist
-mvn -B -Pbundle-web clean package -Drevision=0.1.0-SNAPSHOT -Dweb.dist.dir=$PWD/web-dist
+mvn -B -Pbundle-web clean package -Drevision=0.2.0-SNAPSHOT -Dweb.dist.dir=$PWD/web-dist
 ```
 
 ⚠ `web.dist.dir` is a **property with no usable default** rather than a relative path. In the

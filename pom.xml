@@ -23,7 +23,7 @@
         <!-- project.basedir requires 3.9.12+ -->
         <maven.version>3.9.12</maven.version>
         <!-- revision should be set externally; this is just a fallback -->
-        <revision>0.1.0-SNAPSHOT</revision>
+        <revision>0.2.0-SNAPSHOT</revision>
 
         <maven.compiler.release>${java.version}</maven.compiler.release>
         <maven.compiler.target>${java.version}</maven.compiler.target>
