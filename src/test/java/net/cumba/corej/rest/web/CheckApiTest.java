@@ -991,8 +991,11 @@ class CheckApiTest
         // System.Logger -> JUL -> jul-to-slf4j -> Logback bridge that the appender reads from.
         org.mockito.Mockito.when(runner.run(org.mockito.ArgumentMatchers.any())).thenAnswer(_ ->
         {
-            System.getLogger("net.cumba.corej.core.gen.RuleGenerator").log(System.Logger.Level.INFO,
-                    "Loaded {0} template rule(s) from {1}", 7, marker);
+            // ⚑ Any engine logger name works here — this fixture tests the System.Logger -> JUL ->
+            // slf4j -> Logback bridge, not the class. It used to name the deleted
+            // gen.DatasetRuleResolver (plans/PLAN-remove-rule-generator.md).
+            System.getLogger("net.cumba.corej.core.RulePackageLoader").log(System.Logger.Level.INFO,
+                    "Loaded {0} rule(s) from {1}", 7, marker);
             System.getLogger("net.cumba.corej.core.run.StudyValidationService").log(
                     System.Logger.Level.WARNING, "--dataset {0} did not match: {1}", "XX", marker);
             return emptyResult();
@@ -1010,7 +1013,7 @@ class CheckApiTest
                 .andExpect(jsonPath("$.lines",
                         hasItems(
                                 org.hamcrest.Matchers
-                                        .containsString("Loaded 7 template rule(s) from " + marker),
+                                        .containsString("Loaded 7 rule(s) from " + marker),
                                 org.hamcrest.Matchers
                                         .containsString("--dataset XX did not match: " + marker))));
 

@@ -89,14 +89,14 @@
         <dependency.junit.jupiter.version>6.1.3</dependency.junit.jupiter.version>
         <dependency.mockito.version>5.23.0</dependency.mockito.version>
         <dependency.lombock.version>1.18.48</dependency.lombock.version>
-        <dependency.cumba-oss-commons.version>0.3.0</dependency.cumba-oss-commons.version>
-        <dependency.cumba-oss-datatable.version>0.3.0</dependency.cumba-oss-datatable.version>
+        <dependency.cumba-oss-commons.version>0.4.0-SNAPSHOT</dependency.cumba-oss-commons.version>
+        <dependency.cumba-oss-datatable.version>0.4.0-SNAPSHOT</dependency.cumba-oss-datatable.version>
 
         <!--
             The coreJ engine, released from cumba-oss-corej on its own cadence. These are
             EXTERNAL artifacts here - this repository holds only the clients.
         -->
-        <dependency.cumba-oss-corej.version>0.4.0</dependency.cumba-oss-corej.version>
+        <dependency.cumba-oss-corej.version>0.5.0-SNAPSHOT</dependency.cumba-oss-corej.version>
 
         <!-- REST stack -->
         <dependency.spring-boot.version>4.1.1</dependency.spring-boot.version>

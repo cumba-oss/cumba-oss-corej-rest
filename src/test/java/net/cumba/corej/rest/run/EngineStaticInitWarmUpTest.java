@@ -15,9 +15,16 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 /**
- * Verifies the engine static-init warm-up: forcing {@link DomainClassMap} and
- * {@code RuleGenerator}'s static initializers at startup means their one-time infrastructure
- * warnings fire <em>outside</em> any run, so a subsequent run's captured log does not contain them.
+ * Verifies the engine static-init warm-up: forcing {@link DomainClassMap}'s static initializer at
+ * startup means its one-time infrastructure warnings fire <em>outside</em> any run, so a subsequent
+ * run's captured log does not contain them.
+ *
+ * <p>
+ * ⚑ A second assertion here loaded {@code net.cumba.corej.core.gen.RuleGenerator} by name and
+ * pinned that the warm-up had initialised it. It was removed with the warm-up's own
+ * {@code RuleGenerator} leg by {@code plans/PLAN-remove-rule-generator.md}. ⚠ It referenced the
+ * class as a <b>string literal</b>, so it would have compiled green and failed only at run time.
+ * </p>
  */
 @SpringBootTest
 class EngineStaticInitWarmUpTest
@@ -48,10 +55,6 @@ class EngineStaticInitWarmUpTest
 
         // DomainClassMap's lazy singleton resolved without error.
         assertThat(DomainClassMap.getInstance()).isNotNull();
-        // RuleGenerator's static initializer has run (class is initialized).
-        Class<?> ruleGen = Class.forName("net.cumba.corej.core.gen.RuleGenerator", true,
-                getClass().getClassLoader());
-        assertThat(ruleGen).isNotNull();
     }
 
 

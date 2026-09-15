@@ -74,8 +74,12 @@ class StudyValidationCheckRunnerTest
         sessions.addFile(session.id(), "define.xml", bytes("<x/>"));
         sessions.addFile(session.id(), "extra-rules.json", bytes("{}"));
         // Reference-data fixtures. Since wave 38 registered provider-{sas,xlsx,parquet} in this
-        // module's pom, three of these are openable as a library (.cdt, .xpt, .xlsx) and three are
+        // module's pom, three of these are openable as a library (.cdt, .xpt, .xlsx) and four are
         // not — and the split is a property of the SPI, not of the file names:
+        // ⚠ .xls is in the UNOPENABLE group, deliberately: legacy binary Excel was never readable
+        // by this engine (ExcelProviderSupplier's javadoc — excel-streaming-reader cannot read it),
+        // and it is published by neither the table nor the library half. Kept as a fixture so
+        // legacyXlsIsNotAnExcelFormatThisEngineReads below can pin that it stays rejected.
         // openable → a supplier implements ILibrarySupplier for the extension
         // unopenable→ .parquet and .ndjson have a *table* provider but no library supplier, and
         // "refnoext" resolves to no format at all.
@@ -699,7 +703,7 @@ class StudyValidationCheckRunnerTest
      *
      * <pre>
      * before: cdt, dblib, xml
-     * after : cdt, dblib, xls, xlsx, xml, xpt
+     * after : cdt, dblib, xlsx, xml, xpt
      * </pre>
      *
      * <p>
@@ -718,6 +722,14 @@ class StudyValidationCheckRunnerTest
      * </pre>
      *
      * <p>
+     * ⚑ That block is the <b>verbatim 2026-08-12 output</b> and is left as recorded. The assertion
+     * has since dropped {@code xls}: legacy binary Excel was never readable, and
+     * {@code ExcelProviderSupplier} / {@code ExcelLibrarySupplier} publish only {@code xlsx}. The
+     * control's finding — that the pre-change published set was exactly {@code cdt, dblib, xml} —
+     * is unaffected.
+     * </p>
+     *
+     * <p>
      * — so the control also <em>measures</em> the pre-change published set as exactly
      * {@code cdt, dblib, xml}. {@link #validateAcceptsXptAndExcelReferenceData} errored with the
      * old 400 ({@code format 'xpt' cannot be opened as a data library … Supported reference-data
@@ -734,31 +746,61 @@ class StudyValidationCheckRunnerTest
      * </p>
      */
     @Test
-    void publishedLibraryFormatsIncludeXptXlsAndXlsx()
+    void publishedLibraryFormatsIncludeXptAndXlsx()
     {
         List<String> extensions = new LocalDataTableManager().getSupportedDataLibraryInfos()
                 .stream().map(FileInfo::getFileExtension).filter(e -> e != null && !e.isBlank())
                 .map(e -> e.toLowerCase(Locale.ROOT)).distinct().sorted().toList();
 
-        // The widening itself: these three arrive with provider-sas and provider-xlsx.
-        assertThat(extensions).contains("xpt", "xls", "xlsx");
+        // The widening itself: these two arrive with provider-sas and provider-xlsx.
+        assertThat(extensions).contains("xpt", "xlsx");
+        // ⛔ …and legacy binary Excel does NOT: it is unreadable, not merely unregistered.
+        assertThat(extensions).doesNotContain("xls");
         // …without losing what was already published (the pre-change set).
         assertThat(extensions).contains("cdt", "dblib", "xml");
     }
 
 
     /**
-     * The widening reaches {@code validate}: an {@code .xpt} / {@code .xls} / {@code .xlsx}
-     * reference-data entry is now accepted where it previously produced a 400. ⚑ Before wave 38
-     * these three were not merely rejected at request time — the REST server had no reader for them
-     * at all.
+     * The widening reaches {@code validate}: an {@code .xpt} / {@code .xlsx} reference-data entry
+     * is now accepted where it previously produced a 400. ⚑ Before wave 38 these three were not
+     * merely rejected at request time — the REST server had no reader for them at all.
      */
     @Test
     void validateAcceptsXptAndExcelReferenceData()
     {
         StudyValidationCheckRunner.validate(withReferenceData("ref.xpt"), session);
-        StudyValidationCheckRunner.validate(withReferenceData("ref.xls"), session);
         StudyValidationCheckRunner.validate(withReferenceData("ref.xlsx"), session);
+    }
+
+
+    /**
+     * ⛔ <b>The other half of "Excel": legacy binary {@code .xls} is REJECTED, and that is
+     * deliberate.</b>
+     *
+     * <p>
+     * Three assertions in this class used to expect {@code .xls} alongside {@code .xlsx} — in the
+     * published library formats, in the published table formats, and as accepted reference data.
+     * All three were wrong on the engine's own terms: {@code ExcelProviderSupplier}'s javadoc
+     * records that the format "was never readable" because the underlying
+     * {@code excel-streaming-reader} cannot read it, and both {@code ExcelProviderSupplier.FIS} and
+     * {@code ExcelLibrarySupplier.FIS} publish {@code FI_XLSX} alone. They failed only once an
+     * ordered install put the two repos in one local repository — each was committed and green on
+     * its own.
+     * </p>
+     *
+     * <p>
+     * ⭐ Asserting the <b>rejection</b> rather than deleting the expectation is the point: it pins
+     * the engine's actual contract, so re-introducing {@code .xls} becomes a decision someone has
+     * to make here rather than something that can drift back in unnoticed.
+     * </p>
+     */
+    @Test
+    void legacyXlsIsNotAnExcelFormatThisEngineReads()
+    {
+        assertThatThrownBy(
+                () -> StudyValidationCheckRunner.validate(withReferenceData("ref.xls"), session))
+                        .isInstanceOf(BadRunRequestException.class).hasMessageContaining("xls");
     }
 
 
@@ -806,9 +848,12 @@ class StudyValidationCheckRunnerTest
                 .contains("parquet");
         assertThat(manager.getSupportedDataLibraryInfos()).extracting(FileInfo::getFileExtension)
                 .doesNotContain("parquet");
-        // The sas/xlsx table halves landed too — .xpt/.sas7bdat/.xls/.xlsx datasets now load.
+        // The sas/xlsx table halves landed too — .xpt/.sas7bdat/.xlsx datasets now load.
         assertThat(manager.getSupportedDataTableInfos()).extracting(FileInfo::getFileExtension)
-                .contains("xpt", "sas7bdat", "xls", "xlsx");
+                .contains("xpt", "sas7bdat", "xlsx");
+        // ⛔ .xls is absent from the TABLE half as well, not only the library half.
+        assertThat(manager.getSupportedDataTableInfos()).extracting(FileInfo::getFileExtension)
+                .doesNotContain("xls");
     }
 
 
