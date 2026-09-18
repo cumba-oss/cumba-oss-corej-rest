@@ -735,17 +735,16 @@
                             <configuration>
                                 <!--
                                     Incremental-analysis history file. Anchored to
-                                    `${user.home}/.pitest-history/<artifactId>/history.bin`,
-                                    OUTSIDE the checkout entirely.
-
-                                    ⚠ It used to sit at the repo root, on the reasoning
-                                    that `mvn clean` would not reach it. `mvn clean` was
-                                    never the threat: `actions/checkout` runs
-                                    `git clean -ffdx`, and `-x` deletes IGNORED files, so
-                                    a gitignored in-repo path is a target of that clean
-                                    rather than protected from it - every run started cold.
-                                    CI caches `.pitest-history/**/history.bin` between
-                                    runs (see `.gitea/workflows/main.yml`).
+                                    `${user.home}/.pitest-history/<artifactId>/history.bin`
+                                    so the file lives under the home dir, OUTSIDE both
+                                    any module's `target/` AND the checkout — `mvn
+                                    clean` therefore does not wipe it, nor does
+                                    `actions/checkout`'s `git clean -ffdx` (which
+                                    removes IGNORED files too, so a repo-root
+                                    `.pitest-history/` is not safe from it on a reused
+                                    runner workspace). Warm-cache CI runs can reuse it;
+                                    CI caches `~/.pitest-history` between runs (see
+                                    `.gitea/workflows/main.yml`).
                                 -->
                                 <historyInputFile>${user.home}/.pitest-history/${project.artifactId}/history.bin</historyInputFile>
                                 <historyOutputFile>${user.home}/.pitest-history/${project.artifactId}/history.bin</historyOutputFile>
@@ -803,13 +802,14 @@
                                     With history wired up, the per-module
                                     `historyInputFile` / `historyOutputFile` settings
                                     above read and write
-                                    `.pitest-history/${project.artifactId}/history.bin`
-                                    at the repo root (outside any module's `target/`,
-                                    so `mvn clean` does NOT wipe it). pitest logs
+                                    `~/.pitest-history/${project.artifactId}/history.bin`
+                                    under the home dir (outside any module's `target/`
+                                    and outside the checkout, so neither `mvn clean`
+                                    nor a workspace clean wipes it). pitest logs
                                     "Found plugin : Default history" and "Incremental
                                     analysis reduced number of mutations by N" each
-                                    run. CI caches `.pitest-history/**/history.bin`
-                                    between runs to keep the warm-cache benefit (see
+                                    run. CI caches `~/.pitest-history` between runs to
+                                    keep the warm-cache benefit (see
                                     `.gitea/workflows/main.yml`).
                                 -->
                                 <!-- Threshold gates. Default-effective values are 0
