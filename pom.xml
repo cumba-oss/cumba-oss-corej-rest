@@ -17,6 +17,23 @@
     <version>${revision}</version>
 
     <properties>
+        <!--
+            Repo-root anchor. Every path that points at a file at the ROOT OF THIS
+            REPO resolves through ${repo.root.dir}, and never through the reactor
+            root: the reactor root is this repo only when the repo is built on its
+            own. Built from an aggregator ABOVE this repo (the databrowser-meta
+            repo checks this repo out as a submodule) the reactor root is that
+            outer directory, and every such path then points at a file that does
+            not exist — or, worse, at an OUTPUT directory that is silently
+            written in the wrong place.
+            ${project.basedir} is the module's own directory in every context, so
+            EVERY pom in this repo declares this property relative to its own depth:
+            root = ${project.basedir}, depth 1 = ${project.basedir}/.., depth 2 =
+            ${project.basedir}/../.. . See plans/PLAN-repo-root-anchor.md in the
+            databrowser-meta repo; check_repo_root_anchor.py enforces it.
+        -->
+        <repo.root.dir>${project.basedir}</repo.root.dir>
+
         <java.version>25</java.version>
         <general.encoding>UTF-8</general.encoding>
 
@@ -477,7 +494,7 @@
                                 <printFailingErrors>true</printFailingErrors>
                                 <linkXRef>false</linkXRef>
                                 <rulesets>
-                                    <ruleset>${maven.multiModuleProjectDirectory}/pmd-ruleset.xml</ruleset>
+                                    <ruleset>${repo.root.dir}/pmd-ruleset.xml</ruleset>
                                 </rulesets>
                             </configuration>
                             <executions>
@@ -814,7 +831,7 @@
                                 -->
                                 <jvmArgs>
                                     <jvmArg>-DprojectBasedir=${project.basedir}</jvmArg>
-                                    <jvmArg>-DrepoRoot=${maven.multiModuleProjectDirectory}</jvmArg>
+                                    <jvmArg>-DrepoRoot=${repo.root.dir}</jvmArg>
                                 </jvmArgs>
                             </configuration>
                             <executions>
@@ -880,7 +897,7 @@
                             <artifactId>spotbugs-maven-plugin</artifactId>
                             <configuration>
                                 <!-- Project-wide filter PLUS the module's own filter, comma-separated. -->
-                                <excludeFilterFile>${maven.multiModuleProjectDirectory}/spotbugs_project_filter.xml,${project.basedir}/spotbugs_ignore.xml</excludeFilterFile>
+                                <excludeFilterFile>${repo.root.dir}/spotbugs_project_filter.xml,${project.basedir}/spotbugs_ignore.xml</excludeFilterFile>
                             </configuration>
                         </plugin>
                     </plugins>
@@ -1908,8 +1925,8 @@
                     <artifactId>license-maven-plugin</artifactId>
                     <version>${plugin.license-maven-plugin.version}</version>
                     <configuration>
-                        <licensesConfigFile>${maven.multiModuleProjectDirectory}/src/license/licensesConfig.xml</licensesConfigFile>
-                        <licensesOutputDirectory>${maven.multiModuleProjectDirectory}/src/license/licenses</licensesOutputDirectory>
+                        <licensesConfigFile>${repo.root.dir}/src/license/licensesConfig.xml</licensesConfigFile>
+                        <licensesOutputDirectory>${repo.root.dir}/src/license/licenses</licensesOutputDirectory>
                         <includeTransitiveDependencies>true</includeTransitiveDependencies>
                         <excludedScopes>test,provided</excludedScopes>
                         <!--
@@ -2019,7 +2036,7 @@
                         <workingDirectory>${project.build.directory}/test-cwd</workingDirectory>
                         <systemPropertyVariables>
                             <projectBasedir>${project.basedir}</projectBasedir>
-                            <repoRoot>${maven.multiModuleProjectDirectory}</repoRoot>
+                            <repoRoot>${repo.root.dir}</repoRoot>
                         </systemPropertyVariables>
                     </configuration>
                 </plugin>
@@ -2037,7 +2054,7 @@
                              per-module spotbugs_ignore.xml is layered on top
                              by the spotbugs-module-ignore profile (comma-
                              separated path list). -->
-                        <excludeFilterFile>${maven.multiModuleProjectDirectory}/spotbugs_project_filter.xml</excludeFilterFile>
+                        <excludeFilterFile>${repo.root.dir}/spotbugs_project_filter.xml</excludeFilterFile>
                         <!-- Build-fail toggle driven by the
                              spotbugs.failOnError property (default false).
                              CI flips with -Dspotbugs.failOnError=true. -->
@@ -2206,7 +2223,7 @@
                             -->
                             <eclipse>
                                 <version>4.38</version>
-                                <file>${maven.multiModuleProjectDirectory}/eclipse-formatter.xml</file>
+                                <file>${repo.root.dir}/eclipse-formatter.xml</file>
                             </eclipse>
                             <importOrder/>
                             <removeUnusedImports/>
@@ -2410,7 +2427,7 @@
                         <goals><goal>read-project-properties</goal></goals>
                         <configuration>
                             <files>
-                                <file>${maven.multiModuleProjectDirectory}/sonar-exclusions.properties</file>
+                                <file>${repo.root.dir}/sonar-exclusions.properties</file>
                             </files>
                         </configuration>
                     </execution>
