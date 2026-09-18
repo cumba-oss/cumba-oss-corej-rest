@@ -11,7 +11,7 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * A narrow, <b>strict</b> typed façade over the v2 combined-finding report's {@code Findings} array
- * — decision D35 of {@code plans/PLAN-finding-record-keys-ui.md}.
+ * — decision D35 of {@code plans/done/PLAN-finding-record-keys-ui.md}.
  *
  * <p>
  * It covers <em>only</em> the fields {@link ReportStore#findingsPage} projects into a
