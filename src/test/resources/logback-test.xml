@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Test-only Logback configuration. It exists for ONE reason: the LOG_EXCEPTION_CONVERSION_WORD
+    below. Logback appends a logged throwable's stack trace automatically unless the pattern
+    names a throwable converter, and %nopex is the converter that prints nothing.
+
+    Without it, a passing test that asserts a thrown exception still dumps the production
+    catch/log/rethrow trace into the build log. JUnit prints nothing itself (assertThrows just
+    returns the throwable), so the noise is ours. Measured on this module: 549 stack-frame
+    lines in a green run -> 0, with all 285 log records and all 285 tests unchanged.
+
+    ⚠ This repo needs its own file because it is the one place in the stack whose backend is
+    Logback rather than JUL — see the load-bearing slf4j-jdk14 exclusion in pom.xml. The
+    <java.util.logging.SimpleFormatter.format> property every pom sets does nothing here.
+    See "JUL stack traces in test logs" in .claude/docs/build-gates.md of databrowser-meta.
+
+    Everything else is deliberately Spring Boot's own: the two <include>s pull in Boot's
+    defaults and its CONSOLE appender, so records keep Boot's layout (ISO timestamp, log
+    level, padded thread, padded logger) rather than Logback's plainer default. Setting the
+    property BEFORE the include is what makes this work — Boot's defaults.xml declares it as
+    ${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}, so a value set here wins and the rest of the
+    pattern is untouched.
+
+    ⚠ Two fields of that layout do render empty here: PID and the [corej-cdisc-rest] application
+    name. Boot publishes those as system properties when its LoggingSystem initialises, and
+    Logback reads this file earlier than that — the same earliness that makes the file work
+    at all. Accepted: in a single-JVM test run neither field carries information.
+
+    ⚠ Boot's own logging.exception-conversion-word property gets only PART of the way: Boot
+    applies it when its LoggingSystem initialises from the Environment, so records logged
+    before that — and by tests that never start a context — keep their traces. Measured:
+    549 -> 363 frame lines, versus 0 with this file, because Logback reads this at its own
+    initialisation, which is earlier.
+
+    ⚠ Deliberately NOT a test application.yaml: that would SHADOW
+    src/main/resources/application.yaml on the test classpath and take the app's real
+    configuration with it.
+
+    Safe for RunLogDebugCapture, which taps the engine logger with an appender it attaches
+    programmatically and whose level it sets itself — it depends on SLF4J binding to Logback,
+    not on how Logback was configured. Boot honours this file instead of its own defaults and
+    still applies any logging.level.* properties on top.
+-->
+<configuration>
+
+    <property name="LOG_EXCEPTION_CONVERSION_WORD" value="%nopex" />
+
+    <include resource="org/springframework/boot/logging/logback/defaults.xml" />
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml" />
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE" />
+    </root>
+
+</configuration>
