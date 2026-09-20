@@ -523,7 +523,15 @@
         <profile>
             <id>ErrPrn</id>
             <activation>
-                <activeByDefault>false</activeByDefault>
+                <!--
+                    Property-based activation (not activeByDefault) so the
+                    profile survives explicit `-P main` / `-P dev` selection,
+                    which would otherwise deactivate it. Disable with
+                    `-DskipErrPrn` (or any value, e.g. `-DskipErrPrn=true`).
+                -->
+                <property>
+                    <name>!skipErrPrn</name>
+                </property>
             </activation>
             <build>
                 <pluginManagement>
