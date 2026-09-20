@@ -1,6 +1,7 @@
 package net.cumba.corej.rest.report;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.util.List;
 import java.util.Map;
@@ -158,8 +159,20 @@ class RuleDefsAssemblerTest
     @Test
     void expressionNotationCheckSurvivesTheModelRoundTrip() throws Exception
     {
-        // The deserializer lowers {"expression": …} to the legacy tree in the Rule model; the
-        // assembled document must still display the check in expression notation.
+        // ⭐ Phase 7 of PLAN-typed-expression-engine: the deserializer no longer lowers
+        // {"expression": …} into the legacy leaf tree, so the assembled document displays the
+        // check as it was AUTHORED rather than as the round-trip through that tree re-rendered it.
+        // This expectation used to be `ds_not_exists("ADSL")` — the lowering silently normalised a
+        // bare reference into a quoted name literal on the way through the leaf's single
+        // name/value pair.
+        //
+        // ⚠ Measured before it was changed, because this assembler is what the REST rule-definition
+        // document shows a user: every rule of all 58 shipped packages was rendered under the old
+        // engine and the new one and diffed. 397 of 14 937 rules render differently, across 90 rule
+        // ids, and all 397 are one shape — the authored date()/time() type tag surviving where the
+        // one-name/one-value leaf could not hold it (D102 proved that tag verdict-neutral). NOT ONE
+        // shipped rule changes bare-vs-quoted spelling, which is the shape this test keys on: the
+        // corpus writes a plain name quoted (1 732 sites) and only a dotted reference bare (16).
         Rule r = loadRule("""
                 {"Core":{"Id":"CG0002","Status":"Draft","Version":"1"},
                  "Check":{"expression":"ds_not_exists(ADSL)"}}""");
@@ -167,33 +180,47 @@ class RuleDefsAssemblerTest
         JsonNode check = MAPPER.readTree(json).get("CG0002").get("source").get("Check");
 
         assertThat(check.has("all")).isFalse();
-        assertThat(check.get("expression").asString()).isEqualTo("ds_not_exists(\"ADSL\")");
+        assertThat(check.get("expression").asString()).isEqualTo("ds_not_exists(ADSL)");
     }
 
 
+    /**
+     * ⭐ <b>Phase 7 of {@code PLAN-typed-expression-engine} turned this test into its own opposite,
+     * and the new assertion is the more useful one at a REST boundary.</b> It used to load a legacy
+     * operator-leaf Check and assert the document displayed it as an expression — the display half
+     * of a conversion the engine performed on the way in. The owner retired the leaf model whole
+     * (D121): <i>"incorrect rules should fail loud on load / parse / compile and not need any
+     * fallback"</i>. So there is nothing left to convert, and what a caller who POSTs an old-style
+     * rule needs is a message that says so.
+     */
     @Test
-    void legacyNotationCheckIsDisplayedAsExpression() throws Exception
+    void legacyNotationCheckIsRejectedWithAMessageThatNamesTheReplacement() throws Exception
     {
-        Rule r = loadRule("""
+        String legacy = """
                 {"Core":{"Id":"CG0003","Status":"Draft","Version":"1"},
                  "Check":{"all":[
                    {"name":"DTHFL","operator":"equal_to","value":"Y","value_is_literal":true}
-                 ]}}""");
-        String json = RuleDefsAssembler.assemble(result(List.of(r), Map.of()));
-        JsonNode check = MAPPER.readTree(json).get("CG0003").get("source").get("Check");
+                 ]}}""";
 
-        assertThat(check.has("all")).isFalse();
-        assertThat(check.get("expression").asString()).isEqualTo("DTHFL == \"Y\"");
+        Throwable thrown = catchThrowable(() -> loadRule(legacy));
+
+        assertThat(thrown).isNotNull();
+        // Loud, and it tells the author what to write instead — not merely "could not deserialise".
+        assertThat(thrown).hasMessageContaining("retired").hasMessageContaining("expression:")
+                .hasMessageContaining("equal_to");
     }
 
 
     @Test
     void expandedRuleCheckIsDisplayedAsExpression() throws Exception
     {
+        // ⚠ Phase 7: the fixture is written as an expression because the operator-leaf form no
+        // longer loads (D121). The SUBJECT of this test is unchanged and was never the leaf — it
+        // is that an EXPANDED (generated) rule's Check reaches the document in expression form,
+        // under the "expanded" key rather than "source".
         Rule gen = loadRule("""
                 {"Core":{"Id":"CG0004-AGE","Status":"Draft","Version":"1"},
-                 "Check":{"name":"AGE","operator":"greater_than","value":18,
-                          "value_is_literal":true}}""");
+                 "Check":{"expression":"AGE > 18"}}""");
         String json = RuleDefsAssembler.assemble(result(List.of(), Map.of("CG0004-AGE", gen)));
         JsonNode check = MAPPER.readTree(json).get("CG0004-AGE").get("expanded").get("Check");
 
@@ -204,16 +231,17 @@ class RuleDefsAssemblerTest
     @Test
     void operationsAreDisplayedAsExpression() throws Exception
     {
-        // The loader lowers operations to field form in the model; the assembled document must
-        // still display them in function-call (expression) form.
+        // Phase 7b: authored as a `Bindings:` entry (the only surface); the loader lowers it to
+        // the internal field form, and the assembled document renders it back under `Bindings`.
         Rule r = loadRule("""
                 {"Core":{"Id":"CG0005","Status":"Draft","Version":"1"},
-                 "Operations":[{"id":"$VAR","operator":"variable_count","name":"--LNKGRP"}],
+                 "Bindings":[{"name":"$VAR","expression":"variable_count(--LNKGRP)"}],
                  "Check":{"expression":"ds_not_exists(ADSL)"}}""");
         String json = RuleDefsAssembler.assemble(result(List.of(r), Map.of()));
-        JsonNode op = MAPPER.readTree(json).get("CG0005").get("source").get("Operations").get(0);
+        JsonNode op = MAPPER.readTree(json).get("CG0005").get("source").get("Bindings").get(0);
 
         assertThat(op.has("operator")).isFalse();
+        assertThat(op.get("name").asString()).isEqualTo("$VAR");
         assertThat(op.get("expression").asString()).isEqualTo("variable_count(--LNKGRP)");
     }
 
@@ -223,10 +251,10 @@ class RuleDefsAssemblerTest
     {
         Rule gen = loadRule("""
                 {"Core":{"Id":"CG0006-AGE","Status":"Draft","Version":"1"},
-                 "Operations":[{"id":"$VAR","operator":"variable_count","name":"--LNKGRP"}],
+                 "Bindings":[{"name":"$VAR","expression":"variable_count(--LNKGRP)"}],
                  "Check":{"expression":"ds_not_exists(ADSL)"}}""");
         String json = RuleDefsAssembler.assemble(result(List.of(), Map.of("CG0006-AGE", gen)));
-        JsonNode op = MAPPER.readTree(json).get("CG0006-AGE").get("expanded").get("Operations")
+        JsonNode op = MAPPER.readTree(json).get("CG0006-AGE").get("expanded").get("Bindings")
                 .get(0);
 
         assertThat(op.get("expression").asString()).isEqualTo("variable_count(--LNKGRP)");
