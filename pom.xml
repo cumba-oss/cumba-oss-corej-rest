@@ -208,6 +208,7 @@
         <plugin.maven-source-plugin.version>3.4.0</plugin.maven-source-plugin.version>
         <plugin.central-publishing-maven-plugin.version>0.11.0</plugin.central-publishing-maven-plugin.version>
         <plugin.maven-pmd-plugin.version>3.28.0</plugin.maven-pmd-plugin.version>
+        <pmd.tool.version>7.27.0</pmd.tool.version>
         <plugin.maven-project-info-reports-plugin.version>3.9.0</plugin.maven-project-info-reports-plugin.version>
         <plugin.maven-resources-plugin.version>3.5.0</plugin.maven-resources-plugin.version>
         <plugin.maven-site-plugin.version>3.22.0</plugin.maven-site-plugin.version>
@@ -489,6 +490,32 @@
                             <groupId>org.apache.maven.plugins</groupId>
                             <artifactId>maven-pmd-plugin</artifactId>
                             <version>${plugin.maven-pmd-plugin.version}</version>
+                            <!-- Run a newer PMD engine than the one bundled with
+                                 the plugin (see pmd.tool.version). All four PMD
+                                 modules are pinned in lockstep to avoid a split
+                                 between pmd-core and the language modules. -->
+                            <dependencies>
+                                <dependency>
+                                    <groupId>net.sourceforge.pmd</groupId>
+                                    <artifactId>pmd-core</artifactId>
+                                    <version>${pmd.tool.version}</version>
+                                </dependency>
+                                <dependency>
+                                    <groupId>net.sourceforge.pmd</groupId>
+                                    <artifactId>pmd-java</artifactId>
+                                    <version>${pmd.tool.version}</version>
+                                </dependency>
+                                <dependency>
+                                    <groupId>net.sourceforge.pmd</groupId>
+                                    <artifactId>pmd-javascript</artifactId>
+                                    <version>${pmd.tool.version}</version>
+                                </dependency>
+                                <dependency>
+                                    <groupId>net.sourceforge.pmd</groupId>
+                                    <artifactId>pmd-jsp</artifactId>
+                                    <version>${pmd.tool.version}</version>
+                                </dependency>
+                            </dependencies>
                             <configuration>
                                 <failOnViolation>${pmd.failOnViolation}</failOnViolation>
                                 <printFailingErrors>true</printFailingErrors>
