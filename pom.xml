@@ -867,6 +867,10 @@
                                 <jvmArgs>
                                     <jvmArg>-DprojectBasedir=${project.basedir}</jvmArg>
                                     <jvmArg>-DrepoRoot=${repo.root.dir}</jvmArg>
+                                    <!-- The same test-scope JUL config Surefire loads. Minions inherit none
+                                         of Surefire's <systemPropertyVariables>, so it is repeated here.
+                                         MUST stay SPACE-FREE: pitest splits each jvmArg on whitespace. -->
+                                    <jvmArg>-Djava.util.logging.config.file=${repo.root.dir}/logging-test.properties</jvmArg>
                                 </jvmArgs>
                             </configuration>
                             <executions>
@@ -2072,6 +2076,17 @@
                         <systemPropertyVariables>
                             <projectBasedir>${project.basedir}</projectBasedir>
                             <repoRoot>${repo.root.dir}</repoRoot>
+                            <!--
+                                Test-scope JUL configuration: the root logger stays at INFO and the
+                                CONSOLE HANDLER is filtered to WARNING, so records still reach a
+                                capture handler while the build log loses the application's own
+                                INFO chatter. Unit tests drive production code down its warning and
+                                error paths on purpose, so that chatter is expected noise. Measured
+                                over four CI job logs: 52% of all runner output was application
+                                logging, 44% INFO alone. The file carries the traps; repeated in the
+                                Pitest <jvmArgs>, which inherits nothing from here.
+                            -->
+                            <java.util.logging.config.file>${repo.root.dir}/logging-test.properties</java.util.logging.config.file>
                         </systemPropertyVariables>
                     </configuration>
                 </plugin>
