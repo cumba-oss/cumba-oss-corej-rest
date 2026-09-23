@@ -151,8 +151,8 @@
             study against different rules. check_versions.sh asserts both the agreement and
             that it found five.
         -->
-        <dependency.corej-rules.tag>v0.3.1</dependency.corej-rules.tag>
-        <dependency.corej-rules.version>0.3.1</dependency.corej-rules.version>
+        <dependency.corej-rules.tag>v0.4.0</dependency.corej-rules.tag>
+        <dependency.corej-rules.version>0.4.0</dependency.corej-rules.version>
         <!--
             How many rules-draft-*.json the PINNED release ships. Asserted by exact equality in
             verify-corej-rules-staged, so a change in the corpus's release scope cannot pass
@@ -162,8 +162,8 @@
             DRAFT-free tag that PLAN-unship-draft-rules.md Phase 3 is waiting on — bump this and
             dependency.corej-rules.tag together.
         -->
-        <corej.rules.draft-packages>15</corej.rules.draft-packages>
-        <dependency.corej-rules.sha256>6ca106c26dd24c82b7a47fb4dc39e87200f92df1aa316e2de8dce1929709b742</dependency.corej-rules.sha256>
+        <corej.rules.draft-packages>0</corej.rules.draft-packages>
+        <dependency.corej-rules.sha256>facc58cf87b750d3fd926213897ccf324ea5ee76f8c46efa974f8a3c5fb37ff1</dependency.corej-rules.sha256>
         <!--
             The Define-XML conformance corpus: a SECOND asset of the SAME release, hence no
             tag or version of its own, only its own hash.
@@ -174,7 +174,7 @@
             (family, standard, version), this one (family, version), since for Define-XML the
             standard is always Define-XML.
         -->
-        <dependency.corej-rules-define.sha256>1f359c2c8b25ae6c572da32fef3473f41c25503a5be1c368290740415fe7b802</dependency.corej-rules-define.sha256>
+        <dependency.corej-rules-define.sha256>79893d8126e0f3a4372de8e737c6442645181293ae65fdabeb9f22e570e25579</dependency.corej-rules-define.sha256>
         <!-- jackson-annotations is released a patch digit behind the rest of
              Jackson (2.21, not 2.21.3); see dependencyManagement note below. -->
         <dependency.jackson-annotations.version>2.22</dependency.jackson-annotations.version>
