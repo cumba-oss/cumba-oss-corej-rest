@@ -5,6 +5,7 @@ import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.hasItems;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -63,7 +64,7 @@ class CheckApiTest
 {
 
     @TempDir
-    static Path stagingBase;
+    private static Path stagingBase;
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry)
@@ -254,7 +255,10 @@ class CheckApiTest
     @Test
     void startReturns201WithRunId() throws Exception
     {
-        startCheck(createSession(), "{\"rulesPackages\":[\"cdisc-sdtmig-3-4\"]}");
+        String sessionId = createSession();
+        String runId = startCheck(sessionId, "{\"rulesPackages\":[\"cdisc-sdtmig-3-4\"]}");
+        // The Location's id names the run that was queued, for the session the request named.
+        assertEquals(sessionId, runRegistry.get(runId).sessionId());
     }
 
 
@@ -380,8 +384,10 @@ class CheckApiTest
         String sessionId = createSession();
         upload(sessionId, "REF.cdt");
 
-        startCheck(sessionId, "{\"rulesPackages\":[\"cdisc-sdtmig-3-4\"],"
+        String runId = startCheck(sessionId, "{\"rulesPackages\":[\"cdisc-sdtmig-3-4\"],"
                 + "\"referenceDataFilenames\":[\"REF.cdt\"]}");
+        // …and a queued run that carries the reference data it was given.
+        assertEquals(List.of("REF.cdt"), runRegistry.get(runId).request().referenceDataFilenames());
     }
 
 
@@ -405,8 +411,10 @@ class CheckApiTest
         upload(sessionId, "REF.xpt");
         upload(sessionId, "REF.xlsx");
 
-        startCheck(sessionId, "{\"rulesPackages\":[\"cdisc-sdtmig-3-4\"],"
+        String runId = startCheck(sessionId, "{\"rulesPackages\":[\"cdisc-sdtmig-3-4\"],"
                 + "\"referenceDataFilenames\":[\"REF.xpt\",\"REF.xlsx\"]}");
+        assertEquals(List.of("REF.xpt", "REF.xlsx"),
+                runRegistry.get(runId).request().referenceDataFilenames());
     }
 
 
@@ -750,16 +758,14 @@ class CheckApiTest
         byte[] body = mvc.perform(get("/api/checks/{id}/report", runId).accept(xlsx))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.parseMediaType(xlsx)))
-                .andExpect(header().string("Content-Disposition",
-                        org.hamcrest.Matchers.containsString(".xlsx")))
+                .andExpect(header().string("Content-Disposition", containsString(".xlsx")))
                 .andReturn().getResponse().getContentAsByteArray();
         // The body must be a real, openable workbook carrying the five report sheets.
         try (org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook(
                 new java.io.ByteArrayInputStream(body)))
         {
-            org.junit.jupiter.api.Assertions.assertEquals(6, wb.getNumberOfSheets());
-            org.junit.jupiter.api.Assertions.assertEquals("Conformance Details",
-                    wb.getSheetName(0));
+            assertEquals(6, wb.getNumberOfSheets());
+            assertEquals("Conformance Details", wb.getSheetName(0));
         }
     }
 
@@ -1011,11 +1017,8 @@ class CheckApiTest
         mvc.perform(get("/api/checks/{id}/log/lines", runId).param("from", "0"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.lines",
-                        hasItems(
-                                org.hamcrest.Matchers
-                                        .containsString("Loaded 7 rule(s) from " + marker),
-                                org.hamcrest.Matchers
-                                        .containsString("--dataset XX did not match: " + marker))));
+                        hasItems(containsString("Loaded 7 rule(s) from " + marker),
+                                containsString("--dataset XX did not match: " + marker))));
 
         // Persisted RunLog carries the same lines.
         RunLog persisted = reportStore.loadLog(runId);

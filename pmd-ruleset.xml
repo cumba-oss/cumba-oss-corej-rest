@@ -140,4 +140,20 @@
     <rule ref="category/java/security.xml/HardCodedCryptoKey" />
     <rule ref="category/java/security.xml/InsecureCryptoIv" />
 
+    <rule ref="category/java/errorprone.xml/JUnitJupiterTestNoPrivateModifier" />
+    <rule ref="category/java/errorprone.xml/DetachedTestCase" />
+    <rule ref="category/java/errorprone.xml/AssertEqualsArgumentOrder" />
+    <rule ref="category/java/bestpractices.xml/SimplifiableTestAssertion" />
+    <rule ref="category/java/errorprone.xml/UnnecessaryBooleanAssertion" />
+    <rule ref="category/java/bestpractices.xml/AssertStatementInTest" />
+    <rule ref="category/java/errorprone.xml/WrongTestAnnotation" />
+    <rule ref="category/java/bestpractices.xml/UnitTestShouldUseTestAnnotation" />
+    <rule ref="category/java/bestpractices.xml/JUnitJupiterTestShouldBePackagePrivate" />
+    <!-- MockMvc's ResultActions.andExpect asserts (it throws AssertionError on a mismatch); PMD
+         only counts assert*/check*/verify*/fail. No non-asserting andExpect exists in the stack. -->
+    <rule ref="category/java/bestpractices.xml/UnitTestShouldIncludeAssert">
+        <properties>
+            <property name="extraAssertMethodNames" value="andExpect" />
+        </properties>
+    </rule>
 </ruleset>

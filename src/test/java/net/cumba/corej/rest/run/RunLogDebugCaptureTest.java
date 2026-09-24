@@ -23,7 +23,7 @@ class RunLogDebugCaptureTest
 {
 
     @TempDir
-    static Path base;
+    private static Path base;
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry)
@@ -85,8 +85,18 @@ class RunLogDebugCaptureTest
     @Test
     void capturesNothingWhenNoSinkActive()
     {
-        // Without begin(), engine debug is not routed anywhere (no NPE, no capture).
-        System.getLogger("net.cumba.corej.core.Idle").log(System.Logger.Level.DEBUG, "ignored");
+        // A sink that was active and has ended: nothing logged afterwards on this thread may
+        // reach it (no NPE, no capture) — at DEBUG, or at INFO, which the appender still sees
+        // once the engine logger is back at its configured level.
+        List<String> lines = Collections.synchronizedList(new ArrayList<>());
+        capture.begin(lines::add);
+        capture.end();
+
+        System.Logger log = System.getLogger("net.cumba.corej.core.Idle");
+        log.log(System.Logger.Level.DEBUG, "ignored debug line");
+        log.log(System.Logger.Level.INFO, "ignored info line");
+
+        assertThat(lines).isEmpty();
     }
 
 
@@ -168,32 +178,35 @@ class RunLogDebugCaptureTest
     {
         List<String> linesA = Collections.synchronizedList(new ArrayList<>());
         List<String> linesB = Collections.synchronizedList(new ArrayList<>());
-        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors
-                .newFixedThreadPool(2);
         var propagator = capture.contextPropagator();
         java.util.concurrent.CountDownLatch ready = new java.util.concurrent.CountDownLatch(2);
         java.util.concurrent.CountDownLatch go = new java.util.concurrent.CountDownLatch(1);
-        try
+        // close() (after the shutdownNow below) waits for the pool's threads to be gone.
+        try (java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors
+                .newFixedThreadPool(2))
         {
-            // Run A binds sink A on this thread, wraps + submits its task, then unbinds.
-            capture.begin(linesA::add);
-            Runnable taskA = propagator.apply(() -> emitOn("RunA", "line A", ready, go));
-            capture.end();
-            // Run B binds sink B, wraps + submits, unbinds.
-            capture.begin(linesB::add);
-            Runnable taskB = propagator.apply(() -> emitOn("RunB", "line B", ready, go));
-            capture.end();
+            try
+            {
+                // Run A binds sink A on this thread, wraps + submits its task, then unbinds.
+                capture.begin(linesA::add);
+                Runnable taskA = propagator.apply(() -> emitOn("RunA", "line A", ready, go));
+                capture.end();
+                // Run B binds sink B, wraps + submits, unbinds.
+                capture.begin(linesB::add);
+                Runnable taskB = propagator.apply(() -> emitOn("RunB", "line B", ready, go));
+                capture.end();
 
-            var fa = pool.submit(taskA);
-            var fb = pool.submit(taskB);
-            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
-            go.countDown(); // release both at once so they genuinely interleave on the pool
-            fa.get(5, TimeUnit.SECONDS);
-            fb.get(5, TimeUnit.SECONDS);
-        }
-        finally
-        {
-            pool.shutdownNow();
+                var fa = pool.submit(taskA);
+                var fb = pool.submit(taskB);
+                assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+                go.countDown(); // release both at once so they genuinely interleave on the pool
+                fa.get(5, TimeUnit.SECONDS);
+                fb.get(5, TimeUnit.SECONDS);
+            }
+            finally
+            {
+                pool.shutdownNow();
+            }
         }
         assertThat(linesA).anyMatch(l -> l.contains("line A"));
         assertThat(linesA).noneMatch(l -> l.contains("line B"));

@@ -1,6 +1,7 @@
 package net.cumba.corej.rest.run;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -53,7 +54,7 @@ class StudyValidationCheckRunnerTest
     }
 
     @TempDir
-    static Path stagingBase;
+    private static Path stagingBase;
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry)
@@ -163,7 +164,9 @@ class StudyValidationCheckRunnerTest
         // 9-arg convenience constructor: no metadataProducts field at all (defaults to empty).
         CheckRunRequest req = new CheckRunRequest(null, null, null, null, null, null, null, null,
                 null);
-        StudyValidationCheckRunner.validate(withRulePackages(req), session); // must not throw
+        // Acceptance is the whole contract: validate() returns nothing, it only rejects.
+        assertThatCode(() -> StudyValidationCheckRunner.validate(withRulePackages(req), session))
+                .doesNotThrowAnyException();
     }
 
 
@@ -457,7 +460,9 @@ class StudyValidationCheckRunnerTest
         CheckRunRequest req = new CheckRunRequest(null, null, null, null, null, null,
                 List.of("extra-rules.json"), null, null, null, List.of("tig/1-0/adam"), null,
                 List.of());
-        StudyValidationCheckRunner.validate(req, session); // must not throw
+        // Acceptance is the whole contract: validate() returns nothing, it only rejects.
+        assertThatCode(() -> StudyValidationCheckRunner.validate(req, session))
+                .doesNotThrowAnyException();
     }
 
 
@@ -495,7 +500,9 @@ class StudyValidationCheckRunnerTest
         {
             CheckRunRequest req = new CheckRunRequest(null, null, null, null, null, null, null,
                     null, 1, null, List.of(), level, RULE_PACKAGES);
-            StudyValidationCheckRunner.validate(req, session);
+            // Acceptance is the whole contract: validate() returns nothing, it only rejects.
+            assertThatCode(() -> StudyValidationCheckRunner.validate(req, session))
+                    .as("severityThreshold %s", level).doesNotThrowAnyException();
         }
     }
 
@@ -550,11 +557,12 @@ class StudyValidationCheckRunnerTest
     {
         // withRulePackages: since V4 a file-only selection also needs metadataProducts, and
         // this test's subject is "a well-formed request passes", not the V4 guard.
-        StudyValidationCheckRunner
-                .validate(
-                        withRulePackages(new CheckRunRequest("uc", "define.xml", List.of("ref.cdt"),
-                                "2.1", null, null, List.of("extra-rules.json"), List.of("DM"), 2)),
-                        session);
+        CheckRunRequest req = withRulePackages(
+                new CheckRunRequest("uc", "define.xml", List.of("ref.cdt"), "2.1", null, null,
+                        List.of("extra-rules.json"), List.of("DM"), 2));
+        // Acceptance is the whole contract: validate() returns nothing, it only rejects.
+        assertThatCode(() -> StudyValidationCheckRunner.validate(req, session))
+                .doesNotThrowAnyException();
     }
 
     // ------------------------------------------------------------------
@@ -769,8 +777,13 @@ class StudyValidationCheckRunnerTest
     @Test
     void validateAcceptsXptAndExcelReferenceData()
     {
-        StudyValidationCheckRunner.validate(withReferenceData("ref.xpt"), session);
-        StudyValidationCheckRunner.validate(withReferenceData("ref.xlsx"), session);
+        // Acceptance is the whole contract: validate() returns nothing, it only rejects.
+        assertThatCode(
+                () -> StudyValidationCheckRunner.validate(withReferenceData("ref.xpt"), session))
+                        .doesNotThrowAnyException();
+        assertThatCode(
+                () -> StudyValidationCheckRunner.validate(withReferenceData("ref.xlsx"), session))
+                        .doesNotThrowAnyException();
     }
 
 

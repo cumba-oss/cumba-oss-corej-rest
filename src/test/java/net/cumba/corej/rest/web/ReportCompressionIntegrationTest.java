@@ -38,7 +38,7 @@ class ReportCompressionIntegrationTest
 {
 
     @TempDir
-    static Path stagingBase;
+    private static Path stagingBase;
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry)
@@ -81,11 +81,14 @@ class ReportCompressionIntegrationTest
 
     private void assertGzip(String path, String expectedToken) throws Exception
     {
-        HttpClient client = HttpClient.newHttpClient();
-        HttpResponse<byte[]> response = client
-                .send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
-                        .header("Accept-Encoding", "gzip").header("Accept", "application/json")
-                        .GET().build(), BodyHandlers.ofByteArray());
+        HttpResponse<byte[]> response;
+        try (HttpClient client = HttpClient.newHttpClient())
+        {
+            response = client
+                    .send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+                            .header("Accept-Encoding", "gzip").header("Accept", "application/json")
+                            .GET().build(), BodyHandlers.ofByteArray());
+        }
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.headers().firstValue("Content-Encoding")).contains("gzip");

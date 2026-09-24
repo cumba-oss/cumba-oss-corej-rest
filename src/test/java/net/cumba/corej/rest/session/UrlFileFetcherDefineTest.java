@@ -41,7 +41,7 @@ class UrlFileFetcherDefineTest
             """;
 
     @TempDir
-    static java.nio.file.Path stagingBase;
+    private static java.nio.file.Path stagingBase;
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry)

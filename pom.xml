@@ -519,6 +519,10 @@
                             <configuration>
                                 <failOnViolation>${pmd.failOnViolation}</failOnViolation>
                                 <printFailingErrors>true</printFailingErrors>
+                                <!-- Analyse src/test/java too: a malformed test passes while checking nothing. -->
+                                <includeTests>true</includeTests>
+                                <!-- A file PMD cannot parse must fail the build, not vanish with a WARNING. -->
+                                <skipPmdError>false</skipPmdError>
                                 <linkXRef>false</linkXRef>
                                 <rulesets>
                                     <ruleset>${repo.root.dir}/pmd-ruleset.xml</ruleset>

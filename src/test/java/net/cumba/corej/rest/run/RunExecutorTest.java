@@ -124,7 +124,9 @@ class RunExecutorTest
             catch (InterruptedException e)
             {
                 Thread.currentThread().interrupt();
-                throw new CancelledException();
+                CancelledException cancelled = new CancelledException();
+                cancelled.initCause(e);
+                throw cancelled;
             }
             if (run.isCancelRequested())
             {

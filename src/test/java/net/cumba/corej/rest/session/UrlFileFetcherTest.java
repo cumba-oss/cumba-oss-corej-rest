@@ -29,7 +29,7 @@ class UrlFileFetcherTest
 {
 
     @TempDir
-    static Path stagingBase;
+    private static Path stagingBase;
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry)

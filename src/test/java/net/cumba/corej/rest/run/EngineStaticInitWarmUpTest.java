@@ -31,7 +31,7 @@ class EngineStaticInitWarmUpTest
 {
 
     @TempDir
-    static Path base;
+    private static Path base;
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry)
