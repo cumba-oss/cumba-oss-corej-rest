@@ -246,7 +246,7 @@ public class UrlFileFetcher
         }
         catch (URISyntaxException e)
         {
-            throw new InvalidUrlException("Malformed URL: " + url);
+            throw new InvalidUrlException("Malformed URL: " + url, e);
         }
         String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
         if (!"http".equals(scheme) && !"https".equals(scheme))

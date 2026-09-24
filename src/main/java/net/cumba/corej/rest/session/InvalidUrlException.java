@@ -14,4 +14,10 @@ public final class InvalidUrlException extends RuntimeException
     {
         super(message);
     }
+
+
+    public InvalidUrlException(String message, Throwable cause)
+    {
+        super(message, cause);
+    }
 }

@@ -196,7 +196,7 @@ public class StudyValidationCheckRunner implements CheckRunner
         {
             String message = e.getMessage();
             throw new BadRunRequestException(
-                    message != null ? message : "invalid 'metadataProducts'");
+                    message != null ? message : "invalid 'metadataProducts'", e);
         }
         requireSessionFile(session, req.defineXmlFilename(), "defineXmlFilename");
         for (String name : req.rulesFilenames())

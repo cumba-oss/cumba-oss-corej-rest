@@ -13,4 +13,10 @@ public final class BadRunRequestException extends RuntimeException
     {
         super(message);
     }
+
+
+    public BadRunRequestException(String message, Throwable cause)
+    {
+        super(message, cause);
+    }
 }
