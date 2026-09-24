@@ -8,6 +8,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -173,7 +174,10 @@ class RunLogDebugCaptureTest
      * worker for the task's duration, each run's sink must see only its own line — no cross-run
      * leakage even though the same pooled threads serve both runs.
      */
+    // ⚠ The try-with-resources close() below awaits pool termination with no bound; a worker stuck
+    // on a monitor ignores shutdownNow()'s interrupt. This bound turns that hang into a red.
     @Test
+    @Timeout(value = 60, unit = TimeUnit.SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
     void contextPropagatorIsolatesConcurrentRunsOnAReusedPool() throws Exception
     {
         List<String> linesA = Collections.synchronizedList(new ArrayList<>());

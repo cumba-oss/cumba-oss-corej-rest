@@ -6,6 +6,8 @@ import static org.hamcrest.Matchers.hasItems;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -838,9 +840,16 @@ class CheckApiTest
     @Test
     void deleteRunRemovesItAndReport() throws Exception
     {
-        String runId = seedSucceeded(sampleReport(2)).id();
+        String runId = seedFindings(2);
+        // Non-vacuity: both report renderings exist before the delete.
+        assertTrue(reportStore.hasReport(runId), "v1 report seeded");
+        assertTrue(reportStore.hasReportV2(runId), "v2 report seeded");
         mvc.perform(delete("/api/checks/{id}", runId)).andExpect(status().isNoContent());
         mvc.perform(get("/api/checks/{id}/status", runId)).andExpect(status().isNotFound());
+        // The run's 404 alone cannot tell a dropped report from an orphaned one on disk: assert
+        // the report store itself holds nothing for the run any more.
+        assertFalse(reportStore.hasReport(runId), "v1 report deleted");
+        assertFalse(reportStore.hasReportV2(runId), "v2 report deleted");
     }
 
 
