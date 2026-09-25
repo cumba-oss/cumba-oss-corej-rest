@@ -59,13 +59,13 @@ class MetaControllerTest
         Files.writeString(rulesDir.resolve("rules-fda-sdtmig-3-4.json"), pack("FDA-1", null));
         writeManifest(
                 new RulePackageManifest.Entry("rules-cdisc-sdtmig-3-4.json", "CDISC", "sdtmig",
-                        "3-4", 1),
+                        "3-4", 1, List.of()),
                 new RulePackageManifest.Entry("rules-cdisc-sdtmig-3-3.json", "CDISC", "sdtmig",
-                        "3-3", 1),
+                        "3-3", 1, List.of()),
                 new RulePackageManifest.Entry("rules-cdisc-adamig-1-3.json", "CDISC", "adamig",
-                        "1-3", 1),
+                        "1-3", 1, List.of()),
                 new RulePackageManifest.Entry("rules-fda-sdtmig-3-4.json", "FDA", "sdtmig", "3-4",
-                        1));
+                        1, List.of()));
         System.setProperty("corej.rules.dir", rulesDir.toString());
 
         MetaController.RunOptions opts = new MetaController().runOptions();
@@ -95,7 +95,7 @@ class MetaControllerTest
                 "{\"rules\":{" + "\"a\":{\"Core\":{\"Id\":\"CORE-1\"},\"Use_Case\":\"INDH, PROD\"},"
                         + "\"b\":{\"Core\":{\"Id\":\"CORE-2\"},\"Use_Case\":\"INDH\"}}}");
         writeManifest(new RulePackageManifest.Entry("rules-cdisc-sdtmig-3-4.json", "CDISC",
-                "sdtmig", "3-4", 2));
+                "sdtmig", "3-4", 2, List.of()));
         System.setProperty("corej.rules.dir", rulesDir.toString());
 
         MetaController.RuleOptions ruleOptions = new MetaController().rules("cdisc-sdtmig-3-4");
@@ -113,9 +113,9 @@ class MetaControllerTest
         Files.writeString(rulesDir.resolve("rules-fda-sdtmig-3-4.json"), pack("FDA-1", null));
         writeManifest(
                 new RulePackageManifest.Entry("rules-cdisc-sdtmig-3-4.json", "CDISC", "sdtmig",
-                        "3-4", 1),
+                        "3-4", 1, List.of()),
                 new RulePackageManifest.Entry("rules-fda-sdtmig-3-4.json", "FDA", "sdtmig", "3-4",
-                        1));
+                        1, List.of()));
         System.setProperty("corej.rules.dir", rulesDir.toString());
 
         // Naming the CDISC package sees only the CDISC pack...
@@ -134,7 +134,7 @@ class MetaControllerTest
                 "{\"rules\":{\"u\":{\"Core\":{\"Id\":\"CORE-1\"},"
                         + "\"Description\":\"USUBJID is required\"}}}");
         writeManifest(new RulePackageManifest.Entry("rules-cdisc-sdtmig-3-4.json", "CDISC",
-                "sdtmig", "3-4", 1));
+                "sdtmig", "3-4", 1, List.of()));
         System.setProperty("corej.rules.dir", rulesDir.toString());
 
         MetaController.RuleOptions ruleOptions = new MetaController().rules("cdisc-sdtmig-3-4");
@@ -152,7 +152,7 @@ class MetaControllerTest
     {
         Files.writeString(rulesDir.resolve("rules-cdisc-sdtmig-3-4.json"), pack("CORE-1", null));
         writeManifest(new RulePackageManifest.Entry("rules-cdisc-sdtmig-3-4.json", "CDISC",
-                "sdtmig", "3-4", 1));
+                "sdtmig", "3-4", 1, List.of()));
         System.setProperty("corej.rules.dir", rulesDir.toString());
 
         // A known pack resolves ...

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import net.cumba.corej.core.model.Rule;
 import net.cumba.corej.core.model.RuleCore;
 import net.cumba.corej.core.report.ReportAssembler;
@@ -44,7 +45,7 @@ class RuleDefsAssemblerTest
                 .standard("custom").version("1-0").totalRuntimeSeconds(0.0)
                 .coreEngineVersion("0.0.0-test").build();
         return new StudyValidationResult(report, conformance, List.of(), rules, 0, 0.0, List.of(),
-                generated);
+                generated, Set.of());
     }
 
 

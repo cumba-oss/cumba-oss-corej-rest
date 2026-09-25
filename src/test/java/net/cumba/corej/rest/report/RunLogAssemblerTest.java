@@ -3,6 +3,8 @@ package net.cumba.corej.rest.report;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import net.cumba.corej.core.report.ReportAssembler;
 import net.cumba.corej.core.report.ValidationReportBuilder;
 import net.cumba.corej.core.run.DatasetExecutionSummary;
@@ -29,7 +31,7 @@ class RunLogAssemblerTest
         ReportAssembler.Conformance conformance = ReportAssembler.Conformance.builder()
                 .standard("sdtmig").version("3-4").build();
         return new StudyValidationResult(report, conformance, List.of(), List.of(), 7, 2.5,
-                List.of(summaries));
+                List.of(summaries), Map.of(), Set.of());
     }
 
 

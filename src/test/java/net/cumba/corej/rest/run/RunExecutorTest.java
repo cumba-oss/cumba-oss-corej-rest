@@ -9,6 +9,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -124,13 +126,13 @@ class RunExecutorTest
             catch (InterruptedException e)
             {
                 Thread.currentThread().interrupt();
-                CancelledException cancelled = new CancelledException();
+                CancelledException cancelled = new CancelledException("study validation cancelled");
                 cancelled.initCause(e);
                 throw cancelled;
             }
             if (run.isCancelRequested())
             {
-                throw new CancelledException();
+                throw new CancelledException("study validation cancelled");
             }
             return emptyResult();
         }
@@ -273,7 +275,7 @@ class RunExecutorTest
         ReportAssembler.Conformance conformance = ReportAssembler.Conformance.builder()
                 .standard("sdtmig").version("3-4").build();
         return new StudyValidationResult(report, conformance, List.of(), List.of(), 0, 0.0,
-                List.of());
+                List.of(), Map.of(), Set.of());
     }
 
     /** Runner that returns whatever it is given, including {@code null}. */

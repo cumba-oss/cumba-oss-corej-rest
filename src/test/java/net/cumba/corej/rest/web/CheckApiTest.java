@@ -23,6 +23,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import net.cumba.corej.core.report.ReportAssembler;
 import net.cumba.corej.core.report.ValidationReportBuilder;
@@ -94,7 +96,7 @@ class CheckApiTest
         ReportAssembler.Conformance conformance = ReportAssembler.Conformance.builder()
                 .standard("sdtmig").version("3-4").build();
         return new StudyValidationResult(report, conformance, List.of(), List.of(), 0, 0.0,
-                List.of());
+                List.of(), Map.of(), Set.of());
     }
 
 
