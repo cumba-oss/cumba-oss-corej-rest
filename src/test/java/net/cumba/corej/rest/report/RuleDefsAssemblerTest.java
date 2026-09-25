@@ -39,8 +39,7 @@ class RuleDefsAssemblerTest
 
     private static StudyValidationResult result(List<Rule> rules, Map<String, Rule> generated)
     {
-        ValidationReport report = new net.cumba.corej.core.report.ValidationReportBuilder()
-                .libraryUri("file:///study").build();
+        ValidationReport report = new net.cumba.corej.core.report.ValidationReportBuilder().build();
         ReportAssembler.Conformance conformance = ReportAssembler.Conformance.builder()
                 .standard("custom").version("1-0").totalRuntimeSeconds(0.0)
                 .coreEngineVersion("0.0.0-test").build();
