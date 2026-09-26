@@ -119,6 +119,46 @@ class StudyValidationCheckRunnerTest
                 List.of(tokens), null, List.of("cdisc-adamig-1-3"));
     }
 
+    @Autowired
+    private StudyValidationCheckRunner runner;
+
+    /**
+     * PLAN-report-conformance-fields P10 — a REAL run through this runner, not a seam: the REST
+     * result's conformance block carries the engine jar's own {@code CORE_Engine_Version} (the
+     * runner constructs the service with no argument, which stamped nothing before D4) and the cap
+     * the run applied ({@code maxErrorsPerRule = 2} over a rule flagging all three DM rows: two
+     * findings listed, header {@code "2"} / {@code "True"}).
+     */
+    @Test
+    void run_stampsTheEngineVersionAndTheAppliedCap() throws Exception
+    {
+        Session real = sessions.create();
+        sessions.addFile(real.id(), "dm.csv",
+                bytes("STUDYID,USUBJID\nS1,S1-001\nS1,S1-002\nS1,S1-003\n"));
+        sessions.addFile(real.id(), "rules.json", bytes("""
+                {"rules": {"u1": {"id": "u1", "Core": {"Id": "CORE-REST-CAP"},
+                  "Check": {"expression": "not empty(USUBJID)"}}}}
+                """));
+        CheckRunRequest req = new CheckRunRequest(null, null, null, null, null, null,
+                List.of("rules.json"), null, 1, 2, List.of("standards/custom/1-0"), null,
+                List.of());
+        CheckRun run = new CheckRun("run-cap", real.id(), req);
+
+        net.cumba.corej.core.run.StudyValidationResult result = runner.run(run);
+
+        java.util.Map<String, Object> c = result.sections().conformanceDetails();
+        String engine = net.cumba.corej.core.VersionInfo
+                .forClass(net.cumba.corej.core.run.StudyValidationService.class).version();
+        assertThat(engine).as("CONTROL: the engine jar's version.properties is filtered")
+                .isNotEqualTo("unknown");
+        assertThat(c.get("CORE_Engine_Version")).isEqualTo(engine);
+        assertThat(c.get("Issue_Limit_Per_Rule")).isEqualTo("2");
+        assertThat(c.get("Issue_Limit_Per_Dataset")).isEqualTo("True");
+        assertThat(result.sections().issueDetails().stream()
+                .filter(row -> "CORE-REST-CAP".equals(row.get("core_id"))).count())
+                        .as("the cap really applied").isEqualTo(2L);
+    }
+
     // ------------------------------------------------------------------
     // metadataProducts: validate-first (F2) + catalogue-branch resolution (F3b)
     // ------------------------------------------------------------------

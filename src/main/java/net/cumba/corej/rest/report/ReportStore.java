@@ -485,7 +485,13 @@ public class ReportStore
                 text(c, "Define_XML_Version"), text(c, "CORE_Engine_Version"),
                 text(c, "Total_Runtime"), text(c, "Issue_Limit_Per_Rule"),
                 text(c, "Issue_Limit_Per_Dataset"), text(c, "Report_Generation"),
-                text(c, "Library_Metadata_Basis"), text(c, "Dictionary_Basis"));
+                text(c, "Library_Metadata_Basis"), text(c, "Dictionary_Basis"),
+                // PLAN-report-conformance-fields T1-2: the nine formerly JSON-only keys, by key
+                // from the stored v1 — null on a report persisted before they existed.
+                text(c, "CT_Declaration_Mismatch"), text(c, "Define_Metadata_Basis"),
+                text(c, "UNII_Version"), text(c, "Med_RT_Version"), text(c, "MedDRA_Version"),
+                text(c, "WHODRUG_Version"), text(c, "SNOMED_Version"), text(c, "LOINC_Version"),
+                text(c, "Neoplasm_Version"));
     }
 
 

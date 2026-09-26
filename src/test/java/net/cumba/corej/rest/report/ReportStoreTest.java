@@ -196,6 +196,97 @@ class ReportStoreTest
     }
 
 
+    /**
+     * PLAN-report-conformance-fields P13 / R4: the nine formerly JSON-only keys reach the REST
+     * projection, each asserted with its OWN distinct value — the seven dictionary versions are
+     * adjacent positional {@code String} components, so a transposed {@code text(c, …)} is the
+     * realistic bug and only distinct values catch it.
+     */
+    @Test
+    void projectsTheNineAppendedConformanceFields(@TempDir Path dir) throws IOException
+    {
+        ReportStore store = newStore(dir, 64, Duration.ofMinutes(30));
+        store.persist("run-9", "{\"Conformance_Details\":{\"Standard\":\"SDTMIG\","
+                + "\"CT_Declaration_Mismatch\":\"define declares sdtmct-2023-12-15; run used none\","
+                + "\"Define_Metadata_Basis\":\"degraded — define.xml could not be parsed\","
+                + "\"UNII_Version\":\"unii-1\",\"Med_RT_Version\":\"medrt-2\","
+                + "\"MedDRA_Version\":\"meddra-3\",\"WHODRUG_Version\":\"whodrug-4\","
+                + "\"SNOMED_Version\":\"snomed-5\",\"LOINC_Version\":\"loinc-6\","
+                + "\"Neoplasm_Version\":\"neoplasm-7\"},"
+                + "\"Dataset_Details\":[],\"Issue_Summary\":[],\"Issue_Details\":[],"
+                + "\"Rules_Report\":[]}");
+
+        ConformanceResponse c = store.conformance("run-9");
+        assertThat(c.ctDeclarationMismatch())
+                .isEqualTo("define declares sdtmct-2023-12-15; run used none");
+        assertThat(c.defineMetadataBasis()).isEqualTo("degraded — define.xml could not be parsed");
+        assertThat(c.uniiVersion()).isEqualTo("unii-1");
+        assertThat(c.medRtVersion()).isEqualTo("medrt-2");
+        assertThat(c.meddraVersion()).isEqualTo("meddra-3");
+        assertThat(c.whodrugVersion()).isEqualTo("whodrug-4");
+        assertThat(c.snomedVersion()).isEqualTo("snomed-5");
+        assertThat(c.loincVersion()).isEqualTo("loinc-6");
+        assertThat(c.neoplasmVersion()).isEqualTo("neoplasm-7");
+    }
+
+
+    /**
+     * P13, the other half: a report persisted BEFORE the nine keys existed (the shape
+     * {@link #sampleReport(int)} has always had) projects {@code null} for every one of them — the
+     * change is additive and no stored report is re-rendered.
+     */
+    @Test
+    void aPreFixStoredReportProjectsNullForTheAppendedFields(@TempDir Path dir) throws IOException
+    {
+        ReportStore store = newStore(dir, 64, Duration.ofMinutes(30));
+        store.persist("run-old", sampleReport(1));
+
+        ConformanceResponse c = store.conformance("run-old");
+        assertThat(c.standard()).isEqualTo("SDTMIG"); // the projection itself is live
+        assertThat(c.ctDeclarationMismatch()).isNull();
+        assertThat(c.defineMetadataBasis()).isNull();
+        assertThat(c.uniiVersion()).isNull();
+        assertThat(c.medRtVersion()).isNull();
+        assertThat(c.meddraVersion()).isNull();
+        assertThat(c.whodrugVersion()).isNull();
+        assertThat(c.snomedVersion()).isNull();
+        assertThat(c.loincVersion()).isNull();
+        assertThat(c.neoplasmVersion()).isNull();
+    }
+
+
+    /**
+     * P13, XLSX arm: {@code /report.xlsx} is rendered from the stored v1, so the two notes reach
+     * the template rows 24 and 25 that PLAN-report-conformance-fields appended.
+     */
+    @Test
+    void xlsxRenderedFromStoredJsonFillsTheAppendedConformanceRows(@TempDir Path dir)
+        throws IOException
+    {
+        ReportStore store = newStore(dir, 64, Duration.ofMinutes(30));
+        store.persist("run-x", "{\"Conformance_Details\":{\"Standard\":\"SDTMIG\","
+                + "\"CT_Declaration_Mismatch\":\"define declares sdtmct-2023-12-15; run used none\","
+                + "\"Define_Metadata_Basis\":\"degraded — define.xml could not be parsed\"},"
+                + "\"Dataset_Details\":[],\"Issue_Summary\":[],\"Issue_Details\":[],"
+                + "\"Rules_Report\":[]}");
+
+        byte[] workbook = store.xlsxReport("run-x");
+        try (org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook(
+                new java.io.ByteArrayInputStream(workbook)))
+        {
+            org.apache.poi.ss.usermodel.Sheet c = wb.getSheet("Conformance Details");
+            assertThat(c.getRow(23).getCell(0).getStringCellValue())
+                    .isEqualTo("CT Declaration Mismatch");
+            assertThat(c.getRow(23).getCell(1).getStringCellValue())
+                    .isEqualTo("define declares sdtmct-2023-12-15; run used none");
+            assertThat(c.getRow(24).getCell(0).getStringCellValue())
+                    .isEqualTo("Define Metadata Basis");
+            assertThat(c.getRow(24).getCell(1).getStringCellValue())
+                    .isEqualTo("degraded — define.xml could not be parsed");
+        }
+    }
+
+
     @Test
     void rawReportAndHasReport(@TempDir Path dir) throws IOException
     {

@@ -9,6 +9,14 @@ import org.jspecify.annotations.Nullable;
  * {@code totalRuntime} like {@code "12.34 seconds"}); fields absent from the report are null.
  *
  * <p>
+ * ⭐ PLAN-report-conformance-fields (T1-2): the nine components after {@code dictionaryBasis} — the
+ * CT declaration mismatch, the Define-XML metadata basis and the seven dictionary versions — were
+ * JSON-only until 2026-09-26. They are appended, additive, and projected from the stored v1 report
+ * by key like every other field, so a report persisted before they existed simply projects
+ * {@code null} for them. No {@code API_VERSION} bump (precedent: the two basis fields).
+ * </p>
+ *
+ * <p>
  * ⚠ <b>{@code substandard} is DISPLAY-ONLY and DERIVED</b> (Plan 2 Phase 7, owner ruling
  * 2026-08-28). The server reads it from the report's {@code Conformance_Details}, where
  * {@code StudyValidationService} put the declared TIG leg; nothing branches on it, and it must
@@ -27,13 +35,29 @@ public record ConformanceResponse(@Schema(
         @Schema(description = "Define-XML version, if known") @Nullable String defineXmlVersion,
         @Schema(description = "CORE engine version, if stamped") @Nullable String coreEngineVersion,
         @Schema(description = "Total runtime, e.g. \"12.34 seconds\"") @Nullable String totalRuntime,
-        @Schema(description = "Per-rule issue limit, or \"None\"") @Nullable String issueLimitPerRule,
-        @Schema(description = "Per-dataset issue limit flag") @Nullable String issueLimitPerDataset,
+        @Schema(description = "The findings cap the run applied per rule and dataset (the engine "
+                + "materialises at most this many findings per rule per dataset; default 1000), "
+                + "or \"None\" when the run was unlimited") @Nullable String issueLimitPerRule,
+        @Schema(description = "\"True\" when a finite per-rule cap was applied (the engine's cap is "
+                + "always per rule and dataset), else \"None\"") @Nullable String issueLimitPerDataset,
         @Schema(description = "Report generation timestamp (UTC, ISO-8601)") @Nullable String reportGeneration,
         @Schema(description = "Library degradation note — present only when the CDISC Library "
                 + "could not be consulted for the run") @Nullable String libraryMetadataBasis,
         @Schema(description = "External-dictionary degradation note — present only when some "
                 + "dictionary rule in the run could not be answered; names what loaded (with "
-                + "versions), what did not and why, and the answerable count") @Nullable String dictionaryBasis)
+                + "versions), what did not and why, and the answerable count") @Nullable String dictionaryBasis,
+        @Schema(description = "CT declaration mismatch note — present only when the Define-XML "
+                + "declares a controlled-terminology package set that differs from the one the "
+                + "run used (\"define declares X; run used Y\")") @Nullable String ctDeclarationMismatch,
+        @Schema(description = "Define-XML metadata degradation note — present only when the "
+                + "Define-XML could not be parsed directly and names what the define metadata "
+                + "degraded to") @Nullable String defineMetadataBasis,
+        @Schema(description = "UNII dictionary version the run used, if any") @Nullable String uniiVersion,
+        @Schema(description = "Med-RT dictionary version the run used, if any") @Nullable String medRtVersion,
+        @Schema(description = "MedDRA dictionary version the run used, if any") @Nullable String meddraVersion,
+        @Schema(description = "WHODrug dictionary version the run used, if any") @Nullable String whodrugVersion,
+        @Schema(description = "SNOMED dictionary version the run used, if any") @Nullable String snomedVersion,
+        @Schema(description = "LOINC dictionary version the run used, if any") @Nullable String loincVersion,
+        @Schema(description = "Neoplasm dictionary version the run used, if any") @Nullable String neoplasmVersion)
 {
 }
