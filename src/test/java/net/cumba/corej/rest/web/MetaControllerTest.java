@@ -288,6 +288,15 @@ class MetaControllerTest
         ResponseStatusException seedingOn = org.junit.jupiter.api.Assertions.assertThrows(
                 ResponseStatusException.class, () -> new MetaController(seeding).runOptions());
         assertThat(seedingOn.getReason()).contains("did not replace this store");
+
+        // Review round 2 (M-NEWER): a NEWER-build store answers 503 with the upgrade remedy.
+        relabelFormatVersion(store, 99);
+        ResponseStatusException newer = org.junit.jupiter.api.Assertions.assertThrows(
+                ResponseStatusException.class, () -> new MetaController().runOptions());
+        assertThat(newer.getStatusCode().value()).isEqualTo(503);
+        assertThat(newer.getReason()).contains("written by a newer build")
+                .contains("Upgrade this service").doesNotContain("upgrade this tool")
+                .doesNotContain("Set corej.cache-seed.enabled=true");
     }
 
 

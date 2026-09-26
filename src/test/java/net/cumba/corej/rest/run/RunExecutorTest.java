@@ -333,6 +333,22 @@ class RunExecutorTest
                 new net.cumba.corej.core.metadata.store.StoreFormatException(Path.of("s.zip"), 1,
                         3));
 
+        IOException newer = new IOException("The metadata store cannot be read.",
+                new net.cumba.corej.core.metadata.store.StoreFormatException(Path.of("s.zip"), 99,
+                        3));
+        // Review round 2 (M-NEWER b): a NEWER-build store wants an upgrade or a deliberate
+        // refresh - regardless of the seeding switch, and never the plain enable-seeding text.
+        for (boolean seeding : new boolean[]
+        {
+                false, true
+        })
+        {
+            assertThat(RunExecutor.failureMessage(newer, seeding)).contains("Upgrade this service")
+                    .contains("corej.cache-seed.refresh=true")
+                    .doesNotContain("Set corej.cache-seed.enabled=true")
+                    .doesNotContain("did not replace this store");
+        }
+
         String seedingOff = RunExecutor.failureMessage(failure, false);
         assertThat(seedingOff).startsWith("The metadata store cannot be read.")
                 .contains("corej.cache-seed.enabled=true").doesNotContain("(with refresh=true)")

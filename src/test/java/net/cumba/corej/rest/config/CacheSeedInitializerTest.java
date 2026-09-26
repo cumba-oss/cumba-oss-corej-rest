@@ -228,6 +228,34 @@ class CacheSeedInitializerTest
     }
 
 
+    /**
+     * Review round 2 (M-NEWER a): a store written by a NEWER build is NOT re-seeded without
+     * {@code refresh=true} - a downgrade is an explicit operator action - and with it, it is.
+     */
+    @Test
+    void aNewerFormatStoreIsLeftAloneUnlessRefreshIsExplicit(@TempDir Path root) throws IOException
+    {
+        Path pkl = pickleDir(root);
+        Path target = root.resolve("metadata-cache.zip");
+        initializer(pkl, target, false).run(new DefaultApplicationArguments());
+        relabelFormatVersion(target, 99);
+        byte[] before = Files.readAllBytes(target);
+
+        initializer(pkl, target, false).run(new DefaultApplicationArguments());
+        assertTrue(java.util.Arrays.equals(before, Files.readAllBytes(target)),
+                "a newer-build store is left byte-for-byte alone without refresh");
+        assertThrows(net.cumba.corej.core.metadata.store.StoreFormatException.class,
+                () -> MetadataStore.open(target), "still the newer store");
+
+        initializer(pkl, target, true).run(new DefaultApplicationArguments());
+        try (MetadataStore opened = MetadataStore.open(target))
+        {
+            assertEquals(List.of("sdtmct-2024-09-27"), opened.publishedCtPackages(),
+                    "refresh=true replaces it deliberately");
+        }
+    }
+
+
     /** Rewrites the store's manifest {@code formatVersion} in place (a copy, entry by entry). */
     private static void relabelFormatVersion(Path aStore, int aVersion) throws IOException
     {

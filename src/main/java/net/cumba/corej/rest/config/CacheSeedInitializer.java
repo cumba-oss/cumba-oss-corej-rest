@@ -88,8 +88,16 @@ public class CacheSeedInitializer implements ApplicationRunner
      * seeding ON, the start-up seed evidently did not replace the store, so the remedy is the
      * seeding failure in the start-up log, not the same switch again.
      */
-    public static String storeFormatRemedy(boolean aSeedingEnabled)
+    public static String storeFormatRemedy(StoreFormatException aProblem, boolean aSeedingEnabled)
     {
+        if (aProblem.writtenByNewerBuild())
+        {
+            // Review round 2 (M-NEWER): a NEWER-build store is never replaced by start-up
+            // seeding on its own - a downgrade is an explicit operator action.
+            return " Upgrade this service, or set corej.cache-seed.refresh=true (with"
+                    + " corej.cache-seed.enabled=true) for one start-up to replace it"
+                    + " deliberately, then restart.";
+        }
         if (aSeedingEnabled)
         {
             return " Start-up seeding is enabled (corej.cache-seed.enabled=true) but did not"
@@ -141,6 +149,19 @@ public class CacheSeedInitializer implements ApplicationRunner
                     LOG.info("Metadata store at {} already exists; skipping seeding "
                             + "(set corej.cache-seed.refresh=true to rebuild it)", target);
                     publishDefaultIfUnconfigured(target);
+                    return;
+                }
+                if (oldFormat.writtenByNewerBuild())
+                {
+                    // Review round 2 (M-NEWER a): a store written by a NEWER build is not
+                    // re-seeded on its own - that would silently downgrade it. Loud, and left
+                    // alone; every run on it fails naming the same remedy.
+                    LOG.error(
+                            "Metadata store at {} is format {} and this build reads format {}:"
+                                    + " it was written by a NEWER build, so start-up seeding"
+                                    + " leaves it alone.{}",
+                            target, oldFormat.foundVersion(), oldFormat.knownVersion(),
+                            storeFormatRemedy(oldFormat, true));
                     return;
                 }
                 LOG.warn(

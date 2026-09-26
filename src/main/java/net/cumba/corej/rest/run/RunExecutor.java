@@ -201,9 +201,10 @@ public class RunExecutor
     {
         String message = aFailure.getMessage() != null ? aFailure.getMessage()
                 : aFailure.getClass().getSimpleName();
-        if (aFailure.getCause() instanceof net.cumba.corej.core.metadata.store.StoreFormatException)
+        if (aFailure
+                .getCause() instanceof net.cumba.corej.core.metadata.store.StoreFormatException e)
         {
-            return message + CacheSeedInitializer.storeFormatRemedy(aSeedingEnabled);
+            return message + CacheSeedInitializer.storeFormatRemedy(e, aSeedingEnabled);
         }
         return message;
     }

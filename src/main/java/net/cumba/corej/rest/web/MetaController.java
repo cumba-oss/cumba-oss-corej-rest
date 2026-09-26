@@ -94,8 +94,8 @@ public class MetaController
             // product list — indistinguishable from "no store configured" — while every run on
             // it failed. The form now learns the real cause, with this surface's remedy.
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-                    problem.describe() + "." + CacheSeedInitializer
-                            .storeFormatRemedy(properties.getCacheSeed().isEnabled()));
+                    problem.describe() + "." + CacheSeedInitializer.storeFormatRemedy(problem,
+                            properties.getCacheSeed().isEnabled()));
         }
         return runOptions(catalogue.keys());
     }
