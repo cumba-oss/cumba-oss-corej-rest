@@ -132,19 +132,8 @@ class StudyValidationCheckRunnerTest
     @Test
     void run_stampsTheEngineVersionAndTheAppliedCap() throws Exception
     {
-        Session real = sessions.create();
-        sessions.addFile(real.id(), "dm.csv",
-                bytes("STUDYID,USUBJID\nS1,S1-001\nS1,S1-002\nS1,S1-003\n"));
-        sessions.addFile(real.id(), "rules.json", bytes("""
-                {"rules": {"u1": {"id": "u1", "Core": {"Id": "CORE-REST-CAP"},
-                  "Check": {"expression": "not empty(USUBJID)"}}}}
-                """));
-        CheckRunRequest req = new CheckRunRequest(null, null, null, null, null, null,
-                List.of("rules.json"), null, 1, 2, List.of("standards/custom/1-0"), null,
-                List.of());
-        CheckRun run = new CheckRun("run-cap", real.id(), req);
-
-        net.cumba.corej.core.run.StudyValidationResult result = runner.run(run);
+        net.cumba.corej.core.run.StudyValidationResult result = runner
+                .run(new CheckRun("run-cap", capSession().id(), capRequest(2)));
 
         java.util.Map<String, Object> c = result.sections().conformanceDetails();
         String engine = net.cumba.corej.core.VersionInfo
@@ -157,6 +146,87 @@ class StudyValidationCheckRunnerTest
         assertThat(result.sections().issueDetails().stream()
                 .filter(row -> "CORE-REST-CAP".equals(row.get("core_id"))).count())
                         .as("the cap really applied").isEqualTo(2L);
+    }
+
+    @Autowired
+    private RunLogDebugCapture debugCapture;
+
+    @Autowired
+    private net.cumba.corej.rest.report.ReportStore reportStore;
+
+    /** A three-row DM plus a rule flagging every row, in a fresh session. */
+    private Session capSession() throws Exception
+    {
+        Session real = sessions.create();
+        sessions.addFile(real.id(), "dm.csv",
+                bytes("STUDYID,USUBJID\nS1,S1-001\nS1,S1-002\nS1,S1-003\n"));
+        sessions.addFile(real.id(), "rules.json", bytes("""
+                {"rules": {"u1": {"id": "u1", "Core": {"Id": "CORE-REST-CAP"},
+                  "Check": {"expression": "not empty(USUBJID)"}}}}
+                """));
+        return real;
+    }
+
+
+    private static CheckRunRequest capRequest(@org.jspecify.annotations.Nullable Integer cap)
+    {
+        return new CheckRunRequest(null, null, null, null, null, null, List.of("rules.json"), null,
+                1, cap, List.of("standards/custom/1-0"), null, List.of());
+    }
+
+
+    /**
+     * Review L5 (a): with no per-request cap the runner falls back to the deployment's configured
+     * {@code corej.engine.max-errors-per-rule}, and the header states THAT value — the one the run
+     * applied.
+     */
+    @Test
+    void run_withoutARequestCap_statesTheConfiguredServiceDefault() throws Exception
+    {
+        net.cumba.corej.rest.config.CorejProperties configured = new net.cumba.corej.rest.config.CorejProperties();
+        configured.getEngine().setMaxErrorsPerRule(1);
+        StudyValidationCheckRunner configuredRunner = new StudyValidationCheckRunner(sessions,
+                configured, debugCapture);
+
+        net.cumba.corej.core.run.StudyValidationResult result = configuredRunner
+                .run(new CheckRun("run-cfg", capSession().id(), capRequest(null)));
+
+        java.util.Map<String, Object> c = result.sections().conformanceDetails();
+        assertThat(c.get("Issue_Limit_Per_Rule")).isEqualTo("1");
+        assertThat(c.get("Issue_Limit_Per_Dataset")).isEqualTo("True");
+        assertThat(result.sections().issueDetails().stream()
+                .filter(row -> "CORE-REST-CAP".equals(row.get("core_id"))).count())
+                        .as("the configured cap really applied").isEqualTo(1L);
+    }
+
+
+    /**
+     * Review L5 (b): the whole REST chain — the run's v1 document persisted exactly as
+     * {@code RunExecutor} persists it, then projected by {@code ReportStore.conformance} (what
+     * {@code /conformance} serves) — carries the engine version and the applied cap.
+     */
+    @Test
+    void run_storedV1ProjectsTheEngineVersionAndTheCapOnConformance() throws Exception
+    {
+        net.cumba.corej.core.run.StudyValidationResult result = runner
+                .run(new CheckRun("run-chain", capSession().id(), capRequest(2)));
+
+        String runId = "run-chain-" + UUID.randomUUID();
+        try
+        {
+            reportStore.persist(runId, new com.fasterxml.jackson.databind.ObjectMapper()
+                    .writeValueAsString(result.sections().toExportDocument()));
+
+            net.cumba.corej.rest.report.ConformanceResponse c = reportStore.conformance(runId);
+            assertThat(c.coreEngineVersion()).isEqualTo(net.cumba.corej.core.VersionInfo
+                    .forClass(net.cumba.corej.core.run.StudyValidationService.class).version());
+            assertThat(c.issueLimitPerRule()).isEqualTo("2");
+            assertThat(c.issueLimitPerDataset()).isEqualTo("True");
+        }
+        finally
+        {
+            reportStore.delete(runId);
+        }
     }
 
     // ------------------------------------------------------------------

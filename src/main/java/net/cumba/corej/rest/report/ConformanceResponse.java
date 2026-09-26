@@ -36,8 +36,11 @@ public record ConformanceResponse(@Schema(
         @Schema(description = "CORE engine version, if stamped") @Nullable String coreEngineVersion,
         @Schema(description = "Total runtime, e.g. \"12.34 seconds\"") @Nullable String totalRuntime,
         @Schema(description = "The findings cap the run applied per rule and dataset (the engine "
-                + "materialises at most this many findings per rule per dataset; default 1000), "
-                + "or \"None\" when the run was unlimited") @Nullable String issueLimitPerRule,
+                + "materialises at most this many findings per rule per dataset; the engine "
+                + "default is 1000, overridable per deployment by corej.engine.max-errors-per-rule "
+                + "and per run by the request's maxErrorsPerRule), or \"None\" when the run was "
+                + "unlimited. Reports stored before 2026-09-26 always say \"None\" here, "
+                + "whatever cap their run applied") @Nullable String issueLimitPerRule,
         @Schema(description = "\"True\" when a finite per-rule cap was applied (the engine's cap is "
                 + "always per rule and dataset), else \"None\"") @Nullable String issueLimitPerDataset,
         @Schema(description = "Report generation timestamp (UTC, ISO-8601)") @Nullable String reportGeneration,
