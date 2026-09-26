@@ -44,7 +44,8 @@ public record ConformanceResponse(@Schema(
                 + "an engine without this change may carry \"None\" here for a capped run") @Nullable String issueLimitPerRule,
         @Schema(description = "\"True\" when a finite per-rule cap was applied (the engine's cap is "
                 + "always per rule and dataset), else \"None\"") @Nullable String issueLimitPerDataset,
-        @Schema(description = "Report generation timestamp (UTC, ISO-8601)") @Nullable String reportGeneration,
+        @Schema(description = "Report generation timestamp (UTC, ISO-8601 local date-time "
+                + "without zone designator)") @Nullable String reportGeneration,
         @Schema(description = "Library degradation note — present only when the CDISC Library "
                 + "could not be consulted for the run") @Nullable String libraryMetadataBasis,
         @Schema(description = "External-dictionary degradation note — present only when some "
