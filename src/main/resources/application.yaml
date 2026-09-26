@@ -63,7 +63,15 @@ corej:
   #                                 # store out of band and only points at it.
   #     refresh: false              # true re-acquires everything, ignoring what the store already
   #                                 # holds; with false an existing store is left untouched and is
-  #                                 # not re-seeded at all
+  #                                 # not re-seeded at all - EXCEPT a store of an older on-disk
+  #                                 # FORMAT, which the engine refuses outright (every run on it
+  #                                 # aborts with "must be re-seeded"): with enabled: true it is
+  #                                 # re-seeded in full at start-up whatever refresh says. A store
+  #                                 # format bump (2 -> 3 on 2026-09-26: codelist names and every
+  #                                 # remaining CDISC Library field) therefore needs, in a
+  #                                 # deployment that keeps enabled: false and provisions the
+  #                                 # store out of band, a RE-PROVISIONED store file - until then
+  #                                 # every validation run fails naming the file and this remedy.
   cache-seed:
     enabled: false
   runs:

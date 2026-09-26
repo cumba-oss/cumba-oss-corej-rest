@@ -8,6 +8,8 @@ import net.cumba.corej.core.CoreLibraryAccess;
 import net.cumba.corej.core.metadata.pickle.HttpArchivePickleSource;
 import net.cumba.corej.core.metadata.pickle.LocalPickleSource;
 import net.cumba.corej.core.metadata.pickle.PickleSource;
+import net.cumba.corej.core.metadata.store.MetadataStore;
+import net.cumba.corej.core.metadata.store.StoreFormatException;
 import net.cumba.corej.core.metadata.store.StoreMetadataProviderFactory;
 import net.cumba.corej.core.metadata.store.seed.PickleStoreSeeder;
 import net.cumba.corej.core.metadata.store.seed.StoreSeedOptions;
@@ -39,6 +41,16 @@ import org.springframework.stereotype.Component;
  * Failures are logged and swallowed. A metadata store is an optimisation, not a precondition — a
  * network outage or an upstream layout change must not stop the service from starting. (A run
  * without a store skips the library-dependent rules, ruling R2.)
+ * </p>
+ *
+ * <p>
+ * ⭐ An existing target is skipped only when it OPENS at this build's store format. A store of an
+ * older format (every deployment's store after a format bump — 2 → 3 with
+ * PLAN-define-ct-evaluation) is re-seeded with {@code refresh}, because the engine now REFUSES such
+ * a store and aborts every run on it (T1-10 a), and "target exists ⇒ skip" would have stranded a
+ * container volume on it forever (S11). ⚠ This runs only with {@code corej.cache-seed.enabled=true}
+ * — the default is {@code false}, so a deployment that provisions its store out of band must
+ * re-provision it itself (see {@code application.yaml} and {@code docker-compose.yml}).
  * </p>
  *
  * <p>
@@ -98,15 +110,25 @@ public class CacheSeedInitializer implements ApplicationRunner
                 return;
             }
             Path target = resolveTargetStore();
-            if (!config.isRefresh() && Files.isRegularFile(target))
+            boolean refresh = config.isRefresh();
+            if (!refresh && Files.isRegularFile(target))
             {
-                LOG.info("Metadata store at {} already exists; skipping seeding "
-                        + "(set corej.cache-seed.refresh=true to rebuild it)", target);
-                publishDefaultIfUnconfigured(target);
-                return;
+                StoreFormatException oldFormat = oldFormatOf(target);
+                if (oldFormat == null)
+                {
+                    LOG.info("Metadata store at {} already exists; skipping seeding "
+                            + "(set corej.cache-seed.refresh=true to rebuild it)", target);
+                    publishDefaultIfUnconfigured(target);
+                    return;
+                }
+                LOG.warn(
+                        "Metadata store at {} is format {} and this build reads format {}; the"
+                                + " engine refuses it, so it is re-seeded in full now",
+                        target, oldFormat.foundVersion(), oldFormat.knownVersion());
+                refresh = true;
             }
             LOG.info("Seeding metadata store at {} …", target);
-            StoreSeedOptions options = StoreSeedOptions.of(target).withRefresh(config.isRefresh())
+            StoreSeedOptions options = StoreSeedOptions.of(target).withRefresh(refresh)
                     .withFetchedAt(Instant.now().toString());
             StoreSeedReport report;
             if (config.isFromApi())
@@ -141,6 +163,30 @@ public class CacheSeedInitializer implements ApplicationRunner
             // Errors. Same idiom as the CLI's seedCache.
             LOG.warn("Metadata store seeding failed ({}); continuing without it", e.getMessage(),
                     e);
+        }
+    }
+
+
+    /**
+     * The typed old-format refusal for an existing target, or {@code null} when it opens — or fails
+     * for any OTHER reason, which keeps today's disposition (an existing file is left alone;
+     * {@code refresh=true} replaces it).
+     */
+    private static @Nullable StoreFormatException oldFormatOf(Path aTarget)
+    {
+        try (MetadataStore opened = MetadataStore.open(aTarget))
+        {
+            LOG.debug("Metadata store at {} opens at format {}", aTarget,
+                    opened.manifest().formatVersion());
+            return null;
+        }
+        catch (StoreFormatException e)
+        {
+            return e;
+        }
+        catch (IOException | RuntimeException e)
+        {
+            return null;
         }
     }
 

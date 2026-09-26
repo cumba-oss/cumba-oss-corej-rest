@@ -199,6 +199,66 @@ class CacheSeedInitializerTest
     }
 
 
+    /**
+     * NS5 (PLAN-define-ct-evaluation S11): an existing store of an OLD FORMAT is re-seeded even
+     * with {@code refresh=false} — the engine refuses such a store outright, so "target exists ⇒
+     * skip" would strand the deployment on it forever. The old store is produced by the relabel
+     * trick {@code MetadataStoreCorruptionTest} uses (formatVersion rewritten to 1, which no reader
+     * has known since 2026-09-08), so the case is red on any build that skips an existing file and
+     * stays meaningful across future bumps.
+     */
+    @Test
+    void anOldFormatStoreIsReseededEvenWithoutRefresh(@TempDir Path root) throws IOException
+    {
+        Path pkl = pickleDir(root);
+        Path target = root.resolve("metadata-cache.zip");
+        initializer(pkl, target, false).run(new DefaultApplicationArguments());
+        relabelFormatVersion(target, 1);
+        assertThrows(net.cumba.corej.core.metadata.store.StoreFormatException.class,
+                () -> MetadataStore.open(target), "the relabelled store must be refused");
+
+        initializer(pkl, target, false).run(new DefaultApplicationArguments());
+
+        try (MetadataStore opened = MetadataStore.open(target))
+        {
+            assertEquals(List.of("sdtmct-2024-09-27"), opened.publishedCtPackages(),
+                    "re-seeded in full: the target opens at the current format again");
+        }
+    }
+
+
+    /** Rewrites the store's manifest {@code formatVersion} in place (a copy, entry by entry). */
+    private static void relabelFormatVersion(Path aStore, int aVersion) throws IOException
+    {
+        Map<String, byte[]> entries = new LinkedHashMap<>();
+        try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(aStore.toFile()))
+        {
+            java.util.Enumeration<? extends java.util.zip.ZipEntry> names = zip.entries();
+            while (names.hasMoreElements())
+            {
+                java.util.zip.ZipEntry entry = names.nextElement();
+                entries.put(entry.getName(), zip.getInputStream(entry).readAllBytes());
+            }
+        }
+        String manifest = new String(entries.get("manifest.json"),
+                java.nio.charset.StandardCharsets.UTF_8);
+        String relabelled = manifest.replaceFirst("\"formatVersion\" : \\d+",
+                "\"formatVersion\" : " + aVersion);
+        assertTrue(!relabelled.equals(manifest), "the relabel must change the manifest");
+        entries.put("manifest.json", relabelled.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        try (java.util.zip.ZipOutputStream zip = new java.util.zip.ZipOutputStream(
+                Files.newOutputStream(aStore)))
+        {
+            for (Map.Entry<String, byte[]> entry : entries.entrySet())
+            {
+                zip.putNextEntry(new java.util.zip.ZipEntry(entry.getKey()));
+                zip.write(entry.getValue());
+                zip.closeEntry();
+            }
+        }
+    }
+
+
     /** {@code refresh} rebuilds even an existing store, re-acquiring everything. */
     @Test
     void refreshRebuildsAnExistingStore(@TempDir Path root) throws IOException

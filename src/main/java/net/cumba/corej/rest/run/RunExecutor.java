@@ -152,7 +152,7 @@ public class RunExecutor
         {
             LOG.warn("Check run {} failed", run.id(), e);
             appendStackTrace(run, e);
-            run.markFailed(e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+            run.markFailed(failureMessage(e));
         }
         catch (Throwable t)
         {
@@ -181,6 +181,24 @@ public class RunExecutor
             registry.persist(run);
             persistLogQuietly(run, result);
         }
+    }
+
+
+    /**
+     * The failure text a caller reads: the exception's message, plus this surface's remedy when the
+     * cause is an old-format metadata store (PLAN-define-ct-evaluation T1-10 m1 — the engine's
+     * message is neutral; the surface that knows what its operator can do appends it).
+     */
+    static String failureMessage(Exception aFailure)
+    {
+        String message = aFailure.getMessage() != null ? aFailure.getMessage()
+                : aFailure.getClass().getSimpleName();
+        if (aFailure.getCause() instanceof net.cumba.corej.core.metadata.store.StoreFormatException)
+        {
+            return message + " Set corej.cache-seed.enabled=true (with refresh=true) so the"
+                    + " service re-seeds it at start-up, or re-provision the store file.";
+        }
+        return message;
     }
 
 

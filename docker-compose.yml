@@ -59,7 +59,12 @@ services:
       #     COREJ_CACHESEED_FROMAPI=true plus a CDISC_API_KEY seeds from the live
       #     CDISC Library instead of the published pickle metadata — or provision the
       #     file out of band and just point at it. With no store runs still succeed —
-      #     every library-dependent rule SKIPs, loudly and by name.
+      #     every library-dependent rule SKIPs, loudly and by name. ⚠⚠ A store of an
+      #     OLDER FORMAT is different: the engine refuses it and every run on it
+      #     FAILS ("must be re-seeded"). After a store format bump (2 -> 3 on
+      #     2026-09-26) an out-of-band store must be re-provisioned; with
+      #     COREJ_CACHESEED_ENABLED=true the service re-seeds it in full at the next
+      #     start-up by itself.
       #     ⚠ Only the store's PARENT DIRECTORY is ever created, never the file: an
       #     empty file is a regular file, so the engine would accept it as configured
       #     and then fail opening a malformed archive. ---
