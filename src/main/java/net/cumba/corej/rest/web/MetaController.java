@@ -256,7 +256,11 @@ public class MetaController
                     descriptionsById.putIfAbsent(id.asText(),
                             description.isTextual() ? description.asText() : null);
                 }
-                JsonNode useCase = rule.path("Use_Case");
+                // Use_Case lives under Scope (Scope.java binds it there, and the generated
+                // packages carry it there). This read used to be rule.path("Use_Case") — a key no
+                // package has — so the web UI's use-case picker was always empty
+                // (PLAN-use-case-scope-filter, a finding taken into the plan).
+                JsonNode useCase = rule.path("Scope").path("Use_Case");
                 if (useCase.isTextual())
                 {
                     // Two-arg split with limit 0 is API-identical to the single-arg split(",")

@@ -63,7 +63,7 @@ class MetaControllerTest
 
     private static String pack(String coreId, String useCase)
     {
-        String uc = useCase == null ? "" : ",\"Use_Case\":\"" + useCase + "\"";
+        String uc = useCase == null ? "" : ",\"Scope\":{\"Use_Case\":\"" + useCase + "\"}";
         return "{\"rules\":{\"u\":{\"Core\":{\"Id\":\"" + coreId + "\"}" + uc + "}}}";
     }
 
@@ -122,9 +122,13 @@ class MetaControllerTest
     @Test
     void rulesReturnsCoreIdsAndUseCasesForThePackage() throws IOException
     {
-        Files.writeString(rulesDir.resolve("rules-cdisc-sdtmig-3-4.json"),
-                "{\"rules\":{" + "\"a\":{\"Core\":{\"Id\":\"CORE-1\"},\"Use_Case\":\"INDH, PROD\"},"
-                        + "\"b\":{\"Core\":{\"Id\":\"CORE-2\"},\"Use_Case\":\"INDH\"}}}");
+        Files.writeString(rulesDir.resolve("rules-cdisc-sdtmig-3-4.json"), "{\"rules\":{"
+                + "\"a\":{\"Core\":{\"Id\":\"CORE-1\"},\"Scope\":{\"Use_Case\":\"INDH, PROD\"}},"
+                + "\"b\":{\"Core\":{\"Id\":\"CORE-2\"},\"Scope\":{\"Use_Case\":\"INDH\"}},"
+                // A top-level Use_Case is not the rule model's shape (Scope binds it), so
+                // it is not offered. The fixture used to put BOTH tokens here, which is
+                // how the picker's real read (a key no package carries) stayed green.
+                + "\"c\":{\"Core\":{\"Id\":\"CORE-3\"},\"Use_Case\":\"NONCLIN\"}}}");
         writeManifest(new RulePackageManifest.Entry("rules-cdisc-sdtmig-3-4.json", "CDISC",
                 "sdtmig", "3-4", 2, List.of()));
         System.setProperty("corej.rules.dir", rulesDir.toString());
@@ -132,7 +136,7 @@ class MetaControllerTest
         MetaController.RuleOptions ruleOptions = new MetaController().rules("cdisc-sdtmig-3-4");
 
         assertThat(ruleOptions.rules()).extracting(MetaController.RuleOption::id)
-                .containsExactly("CORE-1", "CORE-2");
+                .containsExactly("CORE-1", "CORE-2", "CORE-3");
         assertThat(ruleOptions.useCases()).containsExactly("INDH", "PROD");
     }
 
