@@ -64,7 +64,9 @@ services:
       #     FAILS ("must be re-seeded"). After a store format bump (2 -> 3 on
       #     2026-09-26) an out-of-band store must be re-provisioned; with
       #     COREJ_CACHESEED_ENABLED=true the service re-seeds it in full at the next
-      #     start-up by itself.
+      #     start-up by itself. A store written by a NEWER build is the other way
+      #     round: left alone (a downgrade), every run on it fails with "upgrade this
+      #     service", and only COREJ_CACHESEED_REFRESH=true replaces it.
       #     ⚠ Only the store's PARENT DIRECTORY is ever created, never the file: an
       #     empty file is a regular file, so the engine would accept it as configured
       #     and then fail opening a malformed archive. ---

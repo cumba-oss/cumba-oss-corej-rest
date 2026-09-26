@@ -375,6 +375,10 @@ discovered per run:
   home is `/app` — but the file itself is never created: only its parent directory, because an
   empty file is a regular file the engine accepts as configured and then fails to open. Seed it
   once with `COREJ_CACHESEED_ENABLED=true`, or provision it out of band.
+  ⚠ **Store format 3 (2026-09-26):** a store of an older format is refused — every run on it fails
+  and `/api/meta/run-options` answers **503** naming the remedy — until it is re-provisioned, or
+  re-seeded at start-up with `COREJ_CACHESEED_ENABLED=true` (no `refresh` needed). A store written
+  by a NEWER build is left alone (a downgrade); only `COREJ_CACHESEED_REFRESH=true` replaces it.
   ⚠ A `corej-data/api-cache` left over from an earlier deployment is the **retired** web-API cache;
   nothing reads it, and the container says so once at startup.
 

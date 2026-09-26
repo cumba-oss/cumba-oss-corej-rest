@@ -72,6 +72,10 @@ corej:
   #                                 # deployment that keeps enabled: false and provisions the
   #                                 # store out of band, a RE-PROVISIONED store file - until then
   #                                 # every validation run fails naming the file and this remedy.
+  #                                 # ⚠ The OTHER direction is never automatic: a store written by
+  #                                 # a NEWER build is left alone (logged at ERROR, published, every
+  #                                 # run on it fails with "upgrade this service"); only an explicit
+  #                                 # refresh: true replaces it, because that is a downgrade.
   cache-seed:
     enabled: false
   runs:
