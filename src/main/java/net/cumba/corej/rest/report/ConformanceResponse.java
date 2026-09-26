@@ -40,9 +40,8 @@ public record ConformanceResponse(@Schema(
                 + "when the run was unlimited. Precedence, first set wins: the request's "
                 + "maxErrorsPerRule, the deployment's corej.engine.max-errors-per-rule, the JVM "
                 + "property corej.maxErrorsPerRule, the MAX_ERRORS_PER_RULE environment variable, "
-                + "then 1000. Reports produced by an engine without this field's fix (a "
-                + "coreEngineVersion predating it) always say \"None\" here, whatever cap their "
-                + "run applied") @Nullable String issueLimitPerRule,
+                + "then 1000. An unstamped report (coreEngineVersion null) or one produced by "
+                + "an engine without this change may carry \"None\" here for a capped run") @Nullable String issueLimitPerRule,
         @Schema(description = "\"True\" when a finite per-rule cap was applied (the engine's cap is "
                 + "always per rule and dataset), else \"None\"") @Nullable String issueLimitPerDataset,
         @Schema(description = "Report generation timestamp (UTC, ISO-8601)") @Nullable String reportGeneration,
