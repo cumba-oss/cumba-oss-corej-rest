@@ -119,6 +119,28 @@ class MetaControllerTest
     }
 
 
+    /**
+     * Review L3: the picker offers only codes a run may name — split and stripped as the engine
+     * splits ({@code ScopeMatcher.useCaseCodes}), then kept only if
+     * {@code StudyValidationParams.isWellFormedUseCase}. A value the loader rejects
+     * ({@code "INDH;PROD"}, {@code "X1"}) would otherwise become a choice the run then refuses.
+     */
+    @Test
+    void rulesOffersOnlyUseCaseCodesARunMayName() throws IOException
+    {
+        Files.writeString(rulesDir.resolve("rules-cdisc-sdtmig-3-4.json"), "{\"rules\":{"
+                + "\"a\":{\"Core\":{\"Id\":\"CORE-1\"},\"Scope\":{\"Use_Case\":\"INDH;PROD, X1\"}},"
+                + "\"b\":{\"Core\":{\"Id\":\"CORE-2\"},\"Scope\":{\"Use_Case\":\" NONCLIN ,\"}}}}");
+        writeManifest(new RulePackageManifest.Entry("rules-cdisc-sdtmig-3-4.json", "CDISC",
+                "sdtmig", "3-4", 2, List.of()));
+        System.setProperty("corej.rules.dir", rulesDir.toString());
+
+        MetaController.RuleOptions ruleOptions = new MetaController().rules("cdisc-sdtmig-3-4");
+
+        assertThat(ruleOptions.useCases()).containsExactly("NONCLIN");
+    }
+
+
     @Test
     void rulesReturnsCoreIdsAndUseCasesForThePackage() throws IOException
     {

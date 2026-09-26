@@ -17,8 +17,10 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import net.cumba.corej.core.RulePackageManifest;
+import net.cumba.corej.core.exec.ScopeMatcher;
 import net.cumba.corej.core.metadata.MetadataProductCatalogue;
 import net.cumba.corej.core.metadata.store.StoreFormatException;
+import net.cumba.corej.core.run.StudyValidationParams;
 import net.cumba.corej.core.run.StudyValidationService;
 import net.cumba.corej.rest.config.CacheSeedInitializer;
 import net.cumba.corej.rest.config.CorejProperties;
@@ -263,14 +265,14 @@ public class MetaController
                 JsonNode useCase = rule.path("Scope").path("Use_Case");
                 if (useCase.isTextual())
                 {
-                    // Two-arg split with limit 0 is API-identical to the single-arg split(",")
-                    // (trailing empties discarded) but avoids Error Prone's StringSplitter finding.
-                    for (String token : useCase.asText().split(",", 0))
+                    // Split exactly as the engine splits (ScopeMatcher.useCaseCodes), and offer
+                    // only codes a run may actually name (review L3): a token the engine would
+                    // reject at run time ("INDH;PROD" read as one code) must not be a choice.
+                    for (String code : ScopeMatcher.useCaseCodes(useCase.asText()))
                     {
-                        String trimmed = token.trim();
-                        if (!trimmed.isEmpty())
+                        if (StudyValidationParams.isWellFormedUseCase(code))
                         {
-                            useCases.add(trimmed);
+                            useCases.add(code);
                         }
                     }
                 }
