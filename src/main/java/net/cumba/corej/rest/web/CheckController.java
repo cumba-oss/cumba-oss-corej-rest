@@ -69,13 +69,17 @@ public class CheckController
 
     private final ReportStore reports;
 
+    /** Read for the deployment's named store, which request validation resolves against. */
+    private final net.cumba.corej.rest.config.CorejProperties properties;
+
     public CheckController(SessionRegistry sessions, RunRegistry runs, RunExecutor executor,
-            ReportStore reports)
+            ReportStore reports, net.cumba.corej.rest.config.CorejProperties properties)
     {
         this.sessions = sessions;
         this.runs = runs;
         this.executor = executor;
         this.reports = reports;
+        this.properties = properties;
     }
 
 
@@ -93,7 +97,9 @@ public class CheckController
             @RequestBody CheckRunRequest request)
     {
         Session session = sessions.get(sessionId);
-        StudyValidationCheckRunner.validate(request, session);
+        // Validated against the store the run will read (M-REST-TIER), never the ambient one.
+        StudyValidationCheckRunner.validate(request, session,
+                StudyValidationCheckRunner.configuredRunStore(properties));
         CheckRun run = new CheckRun(UUID.randomUUID().toString(), sessionId, request);
         executor.submit(run);
         return ResponseEntity.created(URI.create("/api/checks/" + run.id()))

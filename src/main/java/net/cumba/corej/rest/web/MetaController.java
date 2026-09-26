@@ -86,7 +86,10 @@ public class MetaController
                     + "former standards / families / defaultFamily fields are gone.")
     public RunOptions runOptions()
     {
-        MetadataProductCatalogue catalogue = MetadataProductCatalogue.configured();
+        // The catalogue of the store the RUNS read (review round 3, M-REST-TIER): the
+        // deployment's target-store outranks the ambient configuration here as for the run.
+        MetadataProductCatalogue catalogue = MetadataProductCatalogue.configuredFrom(
+                net.cumba.corej.rest.run.StudyValidationCheckRunner.configuredRunStore(properties));
         StoreFormatException problem = catalogue.storeFormatProblem();
         if (problem != null)
         {

@@ -59,9 +59,34 @@ class HomeStaysCleanExtensionSelfTest
     }
 
 
+    /** Review round 3 (M2): the real-home resolution, both branches, pure. */
+    @Test
+    void theRealHomeFallsBackToUserHomeUnlessThatIsTheRedirect(@TempDir Path aHome)
+    {
+        // The Maven-passed property wins whatever user.home is.
+        assertEquals(aHome.toAbsolutePath(), HomeStaysCleanExtension.realHome(aHome.toString(),
+                aHome.resolve("target").resolve("test-home").toString()));
+        // An IDE run: no property, user.home undirected - that IS the real home.
+        assertEquals(aHome.toAbsolutePath(),
+                HomeStaysCleanExtension.realHome(null, aHome.toString()));
+        assertEquals(aHome.toAbsolutePath(),
+                HomeStaysCleanExtension.realHome("  ", aHome.toString()));
+        // A pom that kept the redirect but lost realUserHome: the guard cannot know, so it fails.
+        AssertionFailedError lost = assertThrows(AssertionFailedError.class,
+                () -> HomeStaysCleanExtension.realHome(null,
+                        aHome.resolve("target").resolve("test-home").toString()));
+        assertTrue(lost.getMessage().contains("realUserHome"), lost.getMessage());
+    }
+
+
     @Test
     void theRealHomeIsTheMavenPassedOneNotTheRedirect()
     {
+        // A Maven run only (review round 3, M2): an IDE passes neither pom property, and a red
+        // there would be about the pom, not the code. projectBasedir is set by every Surefire
+        // block and every pitest jvmArgs in the stack.
+        org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("projectBasedir") != null,
+                "not a Maven run");
         Path real = HomeStaysCleanExtension.realHome();
         Path redirected = Path.of(System.getProperty("user.home")).toAbsolutePath();
         assertTrue(!real.equals(redirected),

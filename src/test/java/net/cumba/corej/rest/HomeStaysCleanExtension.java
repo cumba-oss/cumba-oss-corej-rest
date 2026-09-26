@@ -49,21 +49,38 @@ public final class HomeStaysCleanExtension implements BeforeEachCallback, AfterE
 
     private final Map<Path, String> before = new TreeMap<>();
 
+    /** The tail every pom's redirect ends in; a {@code user.home} ending in it IS the redirect. */
+    static final Path REDIRECT_TAIL = Path.of("target", "test-home");
+
     /**
-     * The real home directory: {@code -DrealUserHome}, passed by the poms from the Maven JVM. Fails
-     * loudly when absent — a JVM without it is not the sandboxed one this guard describes.
+     * The real home directory: {@code -DrealUserHome}, passed by the poms from the Maven JVM;
+     * without it (an IDE run, review round 3 M2) {@code user.home} itself, which an IDE leaves
+     * undirected. Fails only when {@code user.home} IS the redirect and the property is absent — a
+     * pom that kept the redirect but lost {@code realUserHome}, the one shape in which the guard
+     * cannot tell which home is real.
      */
     static Path realHome()
     {
-        String home = System.getProperty(REAL_HOME_PROPERTY);
-        if (home == null || home.isBlank())
+        return realHome(System.getProperty(REAL_HOME_PROPERTY), System.getProperty("user.home"));
+    }
+
+
+    /** The pure form of {@link #realHome()}, for the self-test's two branches. */
+    static Path realHome(@Nullable String aRealUserHome, String aUserHome)
+    {
+        if (aRealUserHome != null && !aRealUserHome.isBlank())
         {
-            fail("-D" + REAL_HOME_PROPERTY + " is not set: the poms pass the Maven JVM's user.home"
-                    + " to every test JVM (Surefire systemPropertyVariables AND the pitest jvmArgs)"
-                    + " so this guard knows which home is the REAL one; run the tests through"
-                    + " Maven, or pass it yourself");
+            return Path.of(aRealUserHome).toAbsolutePath();
         }
-        return Path.of(home).toAbsolutePath();
+        Path home = Path.of(aUserHome).toAbsolutePath();
+        if (home.endsWith(REDIRECT_TAIL))
+        {
+            fail("user.home is the test redirect (" + home + ") but -D" + REAL_HOME_PROPERTY
+                    + " is not set: the poms pass the Maven JVM's user.home to every test JVM"
+                    + " (Surefire systemPropertyVariables AND the pitest jvmArgs) so this guard"
+                    + " knows which home is the REAL one; restore that property");
+        }
+        return home;
     }
 
 

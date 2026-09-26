@@ -155,7 +155,11 @@ public class CacheSeedInitializer implements ApplicationRunner
                 {
                     // Review round 2 (M-NEWER a): a store written by a NEWER build is not
                     // re-seeded on its own - that would silently downgrade it. Loud, and left
-                    // alone; every run on it fails naming the same remedy.
+                    // alone - but still PUBLISHED (review round 3, M1): a zero-configuration
+                    // deployment finds its store through this publication, and without it
+                    // every run silently degraded (R2) and /meta answered an empty list instead
+                    // of the T1-10 (a) abort / 503 that name this same remedy.
+                    publishDefaultIfUnconfigured(target);
                     LOG.error(
                             "Metadata store at {} is format {} and this build reads format {}:"
                                     + " it was written by a NEWER build, so start-up seeding"

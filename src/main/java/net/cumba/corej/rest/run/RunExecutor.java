@@ -197,7 +197,7 @@ public class RunExecutor
      * prescribed {@code refresh=true}, which an old-format store never needs, and prescribed
      * enabling seeding to a deployment that already had it enabled and failing.
      */
-    static String failureMessage(Exception aFailure, boolean aSeedingEnabled)
+    public static String failureMessage(Exception aFailure, boolean aSeedingEnabled)
     {
         String message = aFailure.getMessage() != null ? aFailure.getMessage()
                 : aFailure.getClass().getSimpleName();

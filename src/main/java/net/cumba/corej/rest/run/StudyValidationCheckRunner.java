@@ -85,7 +85,7 @@ public class StudyValidationCheckRunner implements CheckRunner
      *            the bound {@code corej.*} configuration
      * @return the absolute store path, or {@code null} when unconfigured
      */
-    static @Nullable String configuredRunStore(
+    public static @Nullable String configuredRunStore(
             net.cumba.corej.rest.config.CorejProperties aProperties)
     {
         String configured = aProperties.getCacheSeed().getTargetStore();
@@ -110,7 +110,27 @@ public class StudyValidationCheckRunner implements CheckRunner
      */
     public static void validate(CheckRunRequest req, Session session)
     {
-        validate(req, session, new LocalDataTableManager());
+        validate(req, session, new LocalDataTableManager(), null);
+    }
+
+
+    /**
+     * As {@link #validate(CheckRunRequest, Session)}, resolving {@code metadataProducts} tokens
+     * against the store the RUN will read (review round 3, M-REST-TIER): {@code aMetadataStore} is
+     * {@link #configuredRunStore} — the deployment's {@code target-store} — which outranks the
+     * ambient configuration for the run, so it must for the request's validation too. Before this
+     * an out-of-band deployment ({@code target-store=B}, seeding disabled, so
+     * {@code CacheSeedInitializer} never ran and published nothing) answered 400 "no catalogue" for
+     * a short token while every run read B.
+     *
+     * @param aMetadataStore
+     *            the deployment's explicitly named store, or {@code null} for the ambient
+     *            configuration alone
+     */
+    public static void validate(CheckRunRequest req, Session session,
+            @Nullable String aMetadataStore)
+    {
+        validate(req, session, new LocalDataTableManager(), aMetadataStore);
     }
 
 
@@ -138,6 +158,14 @@ public class StudyValidationCheckRunner implements CheckRunner
      *             on any violation
      */
     static void validate(CheckRunRequest req, Session session, IDataTableManager manager)
+    {
+        validate(req, session, manager, null);
+    }
+
+
+    /** The body of the three {@code validate} overloads; see each for its parameters. */
+    static void validate(CheckRunRequest req, Session session, IDataTableManager manager,
+            @Nullable String aMetadataStore)
     {
         // ⛔ R3 / R5 — 'standard' and 'version' are gone; a run must NAME ITS RULES. Either
         // arm satisfies it: a bundled package by short name, or uploaded rule files.
@@ -190,7 +218,7 @@ public class StudyValidationCheckRunner implements CheckRunner
         // was already rejected above (V4).
         try
         {
-            resolveMetadataProducts(req);
+            resolveMetadataProducts(req, aMetadataStore);
         }
         catch (IllegalArgumentException e)
         {
@@ -225,14 +253,19 @@ public class StudyValidationCheckRunner implements CheckRunner
      *
      * @param req
      *            the request whose {@code metadataProducts} tokens are resolved
+     * @param aMetadataStore
+     *            the store the run reads ({@link #configuredRunStore}), or {@code null} for the
+     *            ambient configuration — the same precedence the engine applies to the run (review
+     *            round 3, M-REST-TIER)
      * @return the resolved {@code standards/...} cache keys, in declaration order; empty when the
      *         request declares none
      * @throws IllegalArgumentException
      *             when any token fails to resolve; the message names every offending token
      */
-    static List<String> resolveMetadataProducts(CheckRunRequest req)
+    static List<String> resolveMetadataProducts(CheckRunRequest req,
+            @Nullable String aMetadataStore)
     {
-        return ProductKeyResolver.resolveAllConfigured(req.metadataProducts());
+        return ProductKeyResolver.resolveAllConfigured(req.metadataProducts(), aMetadataStore);
     }
 
 
@@ -271,11 +304,12 @@ public class StudyValidationCheckRunner implements CheckRunner
         IDataTableManager manager = new LocalDataTableManager();
         StudyValidationParams.Builder b = StudyValidationParams.builder().manager(manager)
                 .dataLibrary(session.directory().toString()).useCase(req.useCase())
-                // -mp tokens are resolved against the server's configured product catalogue
+                // -mp tokens are resolved against the catalogue of the store THIS run reads
                 // via the same choke point validate() already ran, so a token that passed
                 // validation resolves identically here.
-                .metadataProducts(resolveMetadataProducts(req)).defineVersion(req.defineVersion())
-                .includeRules(req.includeRules()).excludeRules(req.excludeRules())
+                .metadataProducts(resolveMetadataProducts(req, metadataStore))
+                .defineVersion(req.defineVersion()).includeRules(req.includeRules())
+                .excludeRules(req.excludeRules())
                 // datasetFilter() is normalised to a non-null (possibly empty) list in
                 // CheckRunRequest's canonical constructor; an empty set is the builder's
                 // "no filter" sentinel, matching the prior null-clears-it semantics.

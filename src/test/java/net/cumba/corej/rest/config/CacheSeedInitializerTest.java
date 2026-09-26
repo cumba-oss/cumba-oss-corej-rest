@@ -235,17 +235,46 @@ class CacheSeedInitializerTest
     @Test
     void aNewerFormatStoreIsLeftAloneUnlessRefreshIsExplicit(@TempDir Path root) throws IOException
     {
+        org.junit.jupiter.api.Assumptions.assumeTrue(System.getenv("CDISC_METADATA_STORE") == null,
+                "CDISC_METADATA_STORE is set — the publication branch is untestable");
+        System.clearProperty(StoreMetadataProviderFactory.STORE_PROPERTY);
         Path pkl = pickleDir(root);
         Path target = root.resolve("metadata-cache.zip");
         initializer(pkl, target, false).run(new DefaultApplicationArguments());
         relabelFormatVersion(target, 99);
         byte[] before = Files.readAllBytes(target);
+        System.clearProperty(StoreMetadataProviderFactory.STORE_PROPERTY);
 
         initializer(pkl, target, false).run(new DefaultApplicationArguments());
         assertTrue(java.util.Arrays.equals(before, Files.readAllBytes(target)),
                 "a newer-build store is left byte-for-byte alone without refresh");
         assertThrows(net.cumba.corej.core.metadata.store.StoreFormatException.class,
                 () -> MetadataStore.open(target), "still the newer store");
+        // Review round 3 (M1): still PUBLISHED, so a zero-configuration deployment reaches the
+        // T1-10 (a) abort naming the newer-build remedy - not a silent R2 degrade and an empty
+        // /meta list. The run opens its store through exactly this resolution and factory.
+        assertEquals(target.toAbsolutePath().toString(),
+                System.getProperty(StoreMetadataProviderFactory.STORE_PROPERTY),
+                "the newer-build store is published for the engine");
+        Path resolved = StoreMetadataProviderFactory.resolveConfiguredFile(null);
+        assertEquals(target.toAbsolutePath(), resolved);
+        net.cumba.corej.core.metadata.store.StoreFormatException abort = assertThrows(
+                net.cumba.corej.core.metadata.store.StoreFormatException.class,
+                () -> StoreMetadataProviderFactory.open(resolved));
+        assertTrue(abort.writtenByNewerBuild());
+        String failure = net.cumba.corej.rest.run.RunExecutor
+                .failureMessage(new IOException(abort.describe(), abort), true);
+        assertTrue(failure.contains("written by a newer build"), failure);
+        assertTrue(failure.contains("Upgrade this service"), failure);
+        // ... and /meta answers 503 with the same remedy instead of 200 with an empty list.
+        CorejProperties seeding = new CorejProperties();
+        seeding.getCacheSeed().setEnabled(true);
+        org.springframework.web.server.ResponseStatusException meta = assertThrows(
+                org.springframework.web.server.ResponseStatusException.class,
+                () -> new net.cumba.corej.rest.web.MetaController(seeding).runOptions());
+        assertEquals(503, meta.getStatusCode().value());
+        assertTrue(String.valueOf(meta.getReason()).contains("Upgrade this service"),
+                meta.getReason());
 
         initializer(pkl, target, true).run(new DefaultApplicationArguments());
         try (MetadataStore opened = MetadataStore.open(target))

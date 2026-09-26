@@ -20,6 +20,11 @@ class TestHomeIsSandboxedTest
     @Test
     void userHomeIsRedirectedToTargetTestHome()
     {
+        // A Maven run only (review round 3, M2): the redirect is a pom control, and an IDE run
+        // (the owner's) cannot set it - a permanent red there would only teach people to ignore
+        // this class. projectBasedir is passed by every Surefire block and pitest jvmArgs.
+        org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("projectBasedir") != null,
+                "not a Maven run");
         Path home = Path.of(System.getProperty("user.home")).toAbsolutePath();
         assertEquals("test-home", home.getFileName().toString(),
                 "user.home must be <module>/target/test-home in a test JVM, but is " + home);

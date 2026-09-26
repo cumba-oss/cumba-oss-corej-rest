@@ -300,6 +300,43 @@ class MetaControllerTest
     }
 
 
+    /**
+     * Review round 3 (M-REST-TIER): the product list is the catalogue of the store the RUNS read. A
+     * deployment naming {@code target-store=B} with seeding DISABLED (so the initializer never runs
+     * and publishes nothing) used to answer an empty list - and an ambient property store A of
+     * another format used to answer 503 - while every run read B. The named store outranks both,
+     * exactly as it does for the run.
+     */
+    @Test
+    void runOptionsListsTheProductsOfTheDeploymentsNamedStoreNotTheAmbientOne() throws IOException
+    {
+        writeManifest();
+        System.setProperty("corej.rules.dir", rulesDir.toString());
+        Path named = rulesDir.resolve("named-b.zip");
+        new MetadataStoreWriter().publishedCtPackages(List.of())
+                .productCatalogue(List.of("standards/adam/adamig-1-3")).write(named);
+        CorejProperties props = new CorejProperties();
+        props.getCacheSeed().setEnabled(false);
+        props.getCacheSeed().setTargetStore(named.toString());
+
+        // Nothing ambient at all (seeding disabled ⇒ nothing was published).
+        assertThat(new MetaController(props).runOptions().metadataProducts())
+                .containsExactly("adam/adamig-1-3");
+
+        // An ambient property store of another format does not veto the named one.
+        Path ambient = rulesDir.resolve("ambient-old.zip");
+        new MetadataStoreWriter().publishedCtPackages(List.of())
+                .productCatalogue(List.of("standards/sdtmig/3-4")).write(ambient);
+        relabelFormatVersion(ambient, 1);
+        System.setProperty(StoreMetadataProviderFactory.STORE_PROPERTY, ambient.toString());
+        assertThat(new MetaController(props).runOptions().metadataProducts())
+                .containsExactly("adam/adamig-1-3");
+        // ... whereas a deployment naming NO store reads the ambient one, and answers 503.
+        org.junit.jupiter.api.Assertions.assertThrows(ResponseStatusException.class,
+                () -> new MetaController().runOptions());
+    }
+
+
     /** The relabel trick the store tests use: rewrite the manifest's formatVersion in place. */
     private static void relabelFormatVersion(Path aStore, int aVersion) throws IOException
     {

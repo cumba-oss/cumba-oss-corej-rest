@@ -377,6 +377,59 @@ class StudyValidationCheckRunnerTest
     }
 
 
+    /**
+     * Review round 3 (M-REST-TIER): request validation and {@code buildParams} resolve
+     * {@code metadataProducts} against the store the RUN reads - the deployment's
+     * {@code target-store} - not the ambient configuration. With seeding DISABLED the initializer
+     * never runs, so nothing is published: before this a short token got a 400 "no catalogue" while
+     * every run read B.
+     */
+    @Test
+    void validateAndBuildParams_resolveTokensAgainstTheDeploymentsNamedStore(@TempDir Path dir)
+        throws Exception
+    {
+        Path named = dir.resolve("named-b.zip");
+        new net.cumba.corej.core.metadata.store.MetadataStoreWriter().publishedCtPackages(List.of())
+                .productCatalogue(List.of("standards/sdtmig/3-4")).write(named);
+        net.cumba.corej.rest.config.CorejProperties props = new net.cumba.corej.rest.config.CorejProperties();
+        props.getCacheSeed().setEnabled(false);
+        props.getCacheSeed().setTargetStore(named.toString());
+        String store = StudyValidationCheckRunner.configuredRunStore(props);
+        String key = net.cumba.corej.core.metadata.store.StoreMetadataProviderFactory.STORE_PROPERTY;
+        String saved = System.getProperty(key);
+        try
+        {
+            System.clearProperty(key);
+            org.junit.jupiter.api.Assumptions.assumeTrue(
+                    System.getenv("CDISC_METADATA_STORE") == null,
+                    "CDISC_METADATA_STORE is set - the no-ambient-store case is untestable");
+            CheckRunRequest shortToken = withMetadataProducts("3-4");
+
+            // The ambient path (no store anywhere): a bare suffix cannot resolve.
+            assertThatThrownBy(() -> StudyValidationCheckRunner.validate(shortToken, session))
+                    .isInstanceOf(BadRunRequestException.class);
+            // The run's store: it resolves, in validation AND in the params.
+            assertThatCode(() -> StudyValidationCheckRunner.validate(shortToken, session, store))
+                    .doesNotThrowAnyException();
+            StudyValidationParams p = StudyValidationCheckRunner.buildParams(run(shortToken),
+                    session, null, java.util.function.UnaryOperator.identity(), store);
+            assertThat(p.metadataProducts()).containsExactly("standards/sdtmig/3-4");
+            assertThat(p.metadataStore()).isEqualTo(store);
+        }
+        finally
+        {
+            if (saved == null)
+            {
+                System.clearProperty(key);
+            }
+            else
+            {
+                System.setProperty(key, saved);
+            }
+        }
+    }
+
+
     private static CheckRunRequest full(List<String> include, String rulesFile, Integer threads)
     {
         return new CheckRunRequest("uc", "define.xml", List.of("DM.csv"), "2.1", include, null,
