@@ -120,24 +120,28 @@ class MetaControllerTest
 
 
     /**
-     * Review L3: the picker offers only codes a run may name — split and stripped as the engine
-     * splits ({@code ScopeMatcher.useCaseCodes}), then kept only if
-     * {@code StudyValidationParams.isWellFormedUseCase}. A value the loader rejects
-     * ({@code "INDH;PROD"}, {@code "X1"}) would otherwise become a choice the run then refuses.
+     * Review rounds 1-2 (L3/L2): the picker offers codes only from a {@code Use_Case} value the
+     * loader accepts ({@code ScopeMatcher.isWellFormedUseCaseValue}, R-4.10 / R-4.10a). A value the
+     * loader rejects — its rule load-errors and never runs — contributes nothing, even when a code
+     * inside it looks fine: {@code " NONCLIN ,"} (padding + stray comma), {@code "nonclin"} (lower
+     * case), {@code "INDH;PROD, X1"} (one non-code), {@code "PROD, PROD"} (a repeat).
      */
     @Test
-    void rulesOffersOnlyUseCaseCodesARunMayName() throws IOException
+    void rulesOffersCodesOnlyFromValuesTheLoaderAccepts() throws IOException
     {
         Files.writeString(rulesDir.resolve("rules-cdisc-sdtmig-3-4.json"), "{\"rules\":{"
                 + "\"a\":{\"Core\":{\"Id\":\"CORE-1\"},\"Scope\":{\"Use_Case\":\"INDH;PROD, X1\"}},"
-                + "\"b\":{\"Core\":{\"Id\":\"CORE-2\"},\"Scope\":{\"Use_Case\":\" NONCLIN ,\"}}}}");
+                + "\"b\":{\"Core\":{\"Id\":\"CORE-2\"},\"Scope\":{\"Use_Case\":\" NONCLIN ,\"}},"
+                + "\"c\":{\"Core\":{\"Id\":\"CORE-3\"},\"Scope\":{\"Use_Case\":\"nonclin\"}},"
+                + "\"d\":{\"Core\":{\"Id\":\"CORE-4\"},\"Scope\":{\"Use_Case\":\"PROD, PROD\"}},"
+                + "\"e\":{\"Core\":{\"Id\":\"CORE-5\"},\"Scope\":{\"Use_Case\":\"INDH, PROD\"}}}}");
         writeManifest(new RulePackageManifest.Entry("rules-cdisc-sdtmig-3-4.json", "CDISC",
-                "sdtmig", "3-4", 2, List.of()));
+                "sdtmig", "3-4", 5, List.of()));
         System.setProperty("corej.rules.dir", rulesDir.toString());
 
         MetaController.RuleOptions ruleOptions = new MetaController().rules("cdisc-sdtmig-3-4");
 
-        assertThat(ruleOptions.useCases()).containsExactly("NONCLIN");
+        assertThat(ruleOptions.useCases()).containsExactly("INDH", "PROD");
     }
 
 

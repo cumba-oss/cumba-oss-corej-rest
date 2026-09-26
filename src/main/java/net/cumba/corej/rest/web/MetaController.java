@@ -20,7 +20,6 @@ import net.cumba.corej.core.RulePackageManifest;
 import net.cumba.corej.core.exec.ScopeMatcher;
 import net.cumba.corej.core.metadata.MetadataProductCatalogue;
 import net.cumba.corej.core.metadata.store.StoreFormatException;
-import net.cumba.corej.core.run.StudyValidationParams;
 import net.cumba.corej.core.run.StudyValidationService;
 import net.cumba.corej.rest.config.CacheSeedInitializer;
 import net.cumba.corej.rest.config.CorejProperties;
@@ -260,21 +259,17 @@ public class MetaController
                 }
                 // Use_Case lives under Scope (Scope.java binds it there, and the generated
                 // packages carry it there). This read used to be rule.path("Use_Case") — a key no
-                // package has — so the web UI's use-case picker was always empty
-                // (PLAN-use-case-scope-filter, a finding taken into the plan).
+                // package has — so the web UI's use-case picker never got a code and fell back to
+                // free text (PLAN-use-case-scope-filter F1, corrected by its review round 1).
                 JsonNode useCase = rule.path("Scope").path("Use_Case");
-                if (useCase.isTextual())
+                // Offer codes only from a value the loader ACCEPTS (review rounds 1-2, L3/L2):
+                // ScopeMatcher.isWellFormedUseCaseValue is the loader's own R-4.10 / R-4.10a check,
+                // so a rule that load-errors (" NONCLIN ,", "nonclin", "INDH;PROD") contributes no
+                // choice. After that check every code is upper-case, so the TreeSet's exact
+                // de-duplication is the right one.
+                if (useCase.isTextual() && ScopeMatcher.isWellFormedUseCaseValue(useCase.asText()))
                 {
-                    // Split exactly as the engine splits (ScopeMatcher.useCaseCodes), and offer
-                    // only codes a run may actually name (review L3): a token the engine would
-                    // reject at run time ("INDH;PROD" read as one code) must not be a choice.
-                    for (String code : ScopeMatcher.useCaseCodes(useCase.asText()))
-                    {
-                        if (StudyValidationParams.isWellFormedUseCase(code))
-                        {
-                            useCases.add(code);
-                        }
-                    }
+                    useCases.addAll(ScopeMatcher.useCaseCodes(useCase.asText()));
                 }
             }
         }
