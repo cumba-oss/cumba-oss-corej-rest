@@ -22,6 +22,7 @@ import net.cumba.corej.core.report.ReportSections;
 import net.cumba.corej.core.report.ServiceReportManager;
 import net.cumba.corej.core.run.CancelledException;
 import net.cumba.corej.core.run.StudyValidationResult;
+import net.cumba.corej.rest.config.CacheSeedInitializer;
 import net.cumba.corej.rest.config.CorejProperties;
 import net.cumba.corej.rest.report.ReportStore;
 import net.cumba.corej.rest.report.RunLog;
@@ -69,6 +70,9 @@ public class RunExecutor
 
     private final ExecutorService pool;
 
+    /** Whether start-up seeding is on — it decides which remedy {@link #failureMessage} names. */
+    private final boolean seedingEnabled;
+
     public RunExecutor(CorejProperties properties, RunRegistry registry, CheckRunner runner,
             ReportStore reportStore, SessionRegistry sessions, RunLogDebugCapture debugCapture)
     {
@@ -77,6 +81,7 @@ public class RunExecutor
         this.reportStore = reportStore;
         this.sessions = sessions;
         this.debugCapture = debugCapture;
+        this.seedingEnabled = properties.getCacheSeed().isEnabled();
         int parallelism = Math.max(1, properties.getRuns().getMaxParallel());
         AtomicInteger seq = new AtomicInteger();
         this.pool = Executors.newFixedThreadPool(parallelism, r ->
@@ -152,7 +157,7 @@ public class RunExecutor
         {
             LOG.warn("Check run {} failed", run.id(), e);
             appendStackTrace(run, e);
-            run.markFailed(failureMessage(e));
+            run.markFailed(failureMessage(e, seedingEnabled));
         }
         catch (Throwable t)
         {
@@ -187,16 +192,18 @@ public class RunExecutor
     /**
      * The failure text a caller reads: the exception's message, plus this surface's remedy when the
      * cause is an old-format metadata store (PLAN-define-ct-evaluation T1-10 m1 — the engine's
-     * message is neutral; the surface that knows what its operator can do appends it).
+     * message is neutral; the surface that knows what its operator can do appends it). The remedy
+     * depends on whether seeding is already on: review round 1 (REST L1) found the previous text
+     * prescribed {@code refresh=true}, which an old-format store never needs, and prescribed
+     * enabling seeding to a deployment that already had it enabled and failing.
      */
-    static String failureMessage(Exception aFailure)
+    static String failureMessage(Exception aFailure, boolean aSeedingEnabled)
     {
         String message = aFailure.getMessage() != null ? aFailure.getMessage()
                 : aFailure.getClass().getSimpleName();
         if (aFailure.getCause() instanceof net.cumba.corej.core.metadata.store.StoreFormatException)
         {
-            return message + " Set corej.cache-seed.enabled=true (with refresh=true) so the"
-                    + " service re-seeds it at start-up, or re-provision the store file.";
+            return message + CacheSeedInitializer.storeFormatRemedy(aSeedingEnabled);
         }
         return message;
     }

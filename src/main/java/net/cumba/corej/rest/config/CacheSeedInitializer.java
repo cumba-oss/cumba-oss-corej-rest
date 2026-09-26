@@ -80,6 +80,28 @@ import org.springframework.stereotype.Component;
 public class CacheSeedInitializer implements ApplicationRunner
 {
 
+    /**
+     * This surface's remedy for an OLD-FORMAT metadata store (PLAN-define-ct-evaluation T1-10 m1;
+     * review round 1, REST L1/L4): the engine's message is neutral, and what the operator can do
+     * depends on whether start-up seeding is already on. With seeding OFF, switching it on is the
+     * fix — an old-format store is rebuilt at start-up even without {@code refresh=true}. With
+     * seeding ON, the start-up seed evidently did not replace the store, so the remedy is the
+     * seeding failure in the start-up log, not the same switch again.
+     */
+    public static String storeFormatRemedy(boolean aSeedingEnabled)
+    {
+        if (aSeedingEnabled)
+        {
+            return " Start-up seeding is enabled (corej.cache-seed.enabled=true) but did not"
+                    + " replace this store: check the start-up log for the seeding failure"
+                    + " (corej.cache-seed.from-dir / from-api), or re-provision the store file,"
+                    + " then restart.";
+        }
+        return " Set corej.cache-seed.enabled=true so the service re-seeds it at start-up (an"
+                + " old-format store is rebuilt even without corej.cache-seed.refresh=true), or"
+                + " re-provision the store file, then restart.";
+    }
+
     private static final Logger LOG = LoggerFactory.getLogger(CacheSeedInitializer.class);
 
     private final CorejProperties.CacheSeed config;

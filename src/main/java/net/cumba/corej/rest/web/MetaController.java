@@ -18,13 +18,19 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import net.cumba.corej.core.RulePackageManifest;
 import net.cumba.corej.core.metadata.MetadataProductCatalogue;
+import net.cumba.corej.core.metadata.store.StoreFormatException;
 import net.cumba.corej.core.run.StudyValidationService;
+import net.cumba.corej.rest.config.CacheSeedInitializer;
+import net.cumba.corej.rest.config.CorejProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Valid-value metadata for the non-free-text run properties, derived from the rule packs present in
@@ -40,6 +46,22 @@ public class MetaController
 {
 
     private static final Logger LOG = LoggerFactory.getLogger(MetaController.class);
+
+    /** Read for the seeding switch, which decides the old-format-store remedy (REST L4). */
+    private final CorejProperties properties;
+
+    /** The unit-test constructor: default properties, i.e. start-up seeding off. */
+    public MetaController()
+    {
+        this(new CorejProperties());
+    }
+
+
+    @Autowired
+    public MetaController(CorejProperties aProperties)
+    {
+        properties = aProperties;
+    }
 
     /** Published Define-XML versions offered for the run form (display-only passthrough). */
     private static final List<String> DEFINE_VERSIONS = List.of("2.1.0", "2.0.0", "1.0.0");
@@ -64,7 +86,18 @@ public class MetaController
                     + "former standards / families / defaultFamily fields are gone.")
     public RunOptions runOptions()
     {
-        return runOptions(MetadataProductCatalogue.configured().keys());
+        MetadataProductCatalogue catalogue = MetadataProductCatalogue.configured();
+        StoreFormatException problem = catalogue.storeFormatProblem();
+        if (problem != null)
+        {
+            // Review round 1 (REST L4): an old-format store used to surface here as an EMPTY
+            // product list — indistinguishable from "no store configured" — while every run on
+            // it failed. The form now learns the real cause, with this surface's remedy.
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    problem.describe() + "." + CacheSeedInitializer
+                            .storeFormatRemedy(properties.getCacheSeed().isEnabled()));
+        }
+        return runOptions(catalogue.keys());
     }
 
 

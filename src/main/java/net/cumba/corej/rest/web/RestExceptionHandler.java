@@ -18,6 +18,7 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Maps the service's domain exceptions to RFC-7807 problem responses across the session and check
@@ -101,5 +102,18 @@ public class RestExceptionHandler
     public ProblemDetail handleConflict(RuntimeException ex)
     {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+
+    /**
+     * A {@link ResponseStatusException} carries its own status (the /meta endpoint answers 503 for
+     * an old-format metadata store, REST L4); rendered in the same ProblemDetail shape as every
+     * other error here, with the reason as the detail.
+     */
+    @ExceptionHandler(ResponseStatusException.class)
+    public ProblemDetail handleResponseStatus(ResponseStatusException ex)
+    {
+        return ProblemDetail.forStatusAndDetail(ex.getStatusCode(),
+                ex.getReason() != null ? ex.getReason() : ex.getMessage());
     }
 }

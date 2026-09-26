@@ -29,6 +29,7 @@ import org.springframework.boot.DefaultApplicationArguments;
  * directory, and — the property that matters most — that a seeding failure never propagates out of
  * startup.
  */
+@org.junit.jupiter.api.extension.ExtendWith(net.cumba.corej.rest.HomeStaysCleanExtension.class)
 class CacheSeedInitializerTest
 {
 

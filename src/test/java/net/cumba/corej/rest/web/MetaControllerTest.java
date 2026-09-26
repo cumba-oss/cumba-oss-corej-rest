@@ -3,13 +3,25 @@ package net.cumba.corej.rest.web;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Enumeration;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
 import net.cumba.corej.core.RulePackageManifest;
+import net.cumba.corej.core.metadata.store.MetadataStoreWriter;
+import net.cumba.corej.core.metadata.store.StoreMetadataProviderFactory;
+import net.cumba.corej.rest.config.CorejProperties;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Unit tests for {@link MetaController}. The effective rules directory is pointed at a temp dir via
@@ -17,16 +29,35 @@ import org.junit.jupiter.api.io.TempDir;
  * test environment, so the property wins). The controller reads the family-scoped packs it exposes
  * from the directory's {@code packages.json} manifest, so every fixture writes one.
  */
+@org.junit.jupiter.api.extension.ExtendWith(net.cumba.corej.rest.HomeStaysCleanExtension.class)
 class MetaControllerTest
 {
 
     @TempDir
     Path rulesDir;
 
+    private @Nullable String savedStoreProperty;
+
+    @org.junit.jupiter.api.BeforeEach
+    void saveStoreProperty()
+    {
+        savedStoreProperty = System.getProperty(StoreMetadataProviderFactory.STORE_PROPERTY);
+        System.clearProperty(StoreMetadataProviderFactory.STORE_PROPERTY);
+    }
+
+
     @AfterEach
     void clearProperty()
     {
         System.clearProperty("corej.rules.dir");
+        if (savedStoreProperty == null)
+        {
+            System.clearProperty(StoreMetadataProviderFactory.STORE_PROPERTY);
+        }
+        else
+        {
+            System.setProperty(StoreMetadataProviderFactory.STORE_PROPERTY, savedStoreProperty);
+        }
     }
 
 
@@ -223,5 +254,69 @@ class MetaControllerTest
         assertThat(opts.packages()).isEmpty();
         assertThat(opts.defineVersions()).contains("2.1.0");
         assertThat(opts.metadataProducts()).containsExactly("adam/adamig-1-3", "sdtmig/3-4");
+    }
+
+
+    /**
+     * REST L4 (review round 1): an OLD-FORMAT configured store must not read as "no products" —
+     * that is what "no store configured" looks like, and every run on it fails. The endpoint
+     * answers 503 naming the format problem and this surface's remedy, which depends on the seeding
+     * switch.
+     */
+    @Test
+    void runOptionsAnswers503ForAnOldFormatStoreInsteadOfAnEmptyProductList() throws IOException
+    {
+        writeManifest();
+        System.setProperty("corej.rules.dir", rulesDir.toString());
+        Path store = rulesDir.resolve("metadata-cache.zip");
+        new MetadataStoreWriter().publishedCtPackages(List.of())
+                .productCatalogue(List.of("standards/sdtmig/3-4")).write(store);
+        System.setProperty(StoreMetadataProviderFactory.STORE_PROPERTY, store.toString());
+        assertThat(new MetaController().runOptions().metadataProducts())
+                .containsExactly("sdtmig/3-4");
+
+        relabelFormatVersion(store, 1);
+
+        ResponseStatusException refused = org.junit.jupiter.api.Assertions.assertThrows(
+                ResponseStatusException.class, () -> new MetaController().runOptions());
+        assertThat(refused.getStatusCode().value()).isEqualTo(503);
+        assertThat(refused.getReason()).contains("is format 1")
+                .contains("corej.cache-seed.enabled=true").doesNotContain("start-up log");
+
+        CorejProperties seeding = new CorejProperties();
+        seeding.getCacheSeed().setEnabled(true);
+        ResponseStatusException seedingOn = org.junit.jupiter.api.Assertions.assertThrows(
+                ResponseStatusException.class, () -> new MetaController(seeding).runOptions());
+        assertThat(seedingOn.getReason()).contains("did not replace this store");
+    }
+
+
+    /** The relabel trick the store tests use: rewrite the manifest's formatVersion in place. */
+    private static void relabelFormatVersion(Path aStore, int aVersion) throws IOException
+    {
+        Map<String, byte[]> entries = new LinkedHashMap<>();
+        try (ZipFile zip = new ZipFile(aStore.toFile()))
+        {
+            Enumeration<? extends ZipEntry> names = zip.entries();
+            while (names.hasMoreElements())
+            {
+                ZipEntry entry = names.nextElement();
+                entries.put(entry.getName(), zip.getInputStream(entry).readAllBytes());
+            }
+        }
+        String manifest = new String(entries.get("manifest.json"), StandardCharsets.UTF_8);
+        String relabelled = manifest.replaceFirst("\"formatVersion\" : \\d+",
+                "\"formatVersion\" : " + aVersion);
+        assertThat(relabelled).isNotEqualTo(manifest);
+        entries.put("manifest.json", relabelled.getBytes(StandardCharsets.UTF_8));
+        try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(aStore)))
+        {
+            for (Map.Entry<String, byte[]> entry : entries.entrySet())
+            {
+                zip.putNextEntry(new ZipEntry(entry.getKey()));
+                zip.write(entry.getValue());
+                zip.closeEntry();
+            }
+        }
     }
 }

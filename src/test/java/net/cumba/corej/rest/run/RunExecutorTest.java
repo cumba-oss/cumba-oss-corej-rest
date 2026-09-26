@@ -322,6 +322,31 @@ class RunExecutorTest
 
 
     /**
+     * REST L1 (review round 1): the old-format-store remedy depends on whether seeding is on.
+     * Seeding OFF prescribes the switch and never {@code refresh=true} (an old store is rebuilt
+     * without it); seeding ON names the start-up seeding failure instead of the switch again.
+     */
+    @Test
+    void anOldFormatStoreFailureNamesTheRemedyThatFitsTheSeedingSwitch()
+    {
+        IOException failure = new IOException("The metadata store cannot be read.",
+                new net.cumba.corej.core.metadata.store.StoreFormatException(Path.of("s.zip"), 1,
+                        3));
+
+        String seedingOff = RunExecutor.failureMessage(failure, false);
+        assertThat(seedingOff).startsWith("The metadata store cannot be read.")
+                .contains("corej.cache-seed.enabled=true").doesNotContain("(with refresh=true)")
+                .contains("without corej.cache-seed.refresh=true");
+
+        String seedingOn = RunExecutor.failureMessage(failure, true);
+        assertThat(seedingOn).contains("did not replace this store").contains("start-up log")
+                .doesNotContain("Set corej.cache-seed.enabled=true");
+
+        assertThat(RunExecutor.failureMessage(new IOException("plain"), true)).isEqualTo("plain");
+    }
+
+
+    /**
      * The counterpart: a real result succeeds AND leaves the report artifacts behind. Without this
      * the persist block has no coverage in either direction (the four VoidMethodCall mutants on it
      * were NO_COVERAGE).

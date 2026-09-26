@@ -33,6 +33,7 @@ import org.springframework.test.context.DynamicPropertySource;
  * Tests the request→params mapping and request validation of {@link StudyValidationCheckRunner}.
  */
 @SpringBootTest
+@org.junit.jupiter.api.extension.ExtendWith(net.cumba.corej.rest.HomeStaysCleanExtension.class)
 class StudyValidationCheckRunnerTest
 {
 

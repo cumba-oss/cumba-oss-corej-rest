@@ -16,6 +16,7 @@ import org.springframework.context.ApplicationContext;
  * {@code corej.sessions.dir}, so they would not catch that.
  */
 @SpringBootTest
+@org.junit.jupiter.api.extension.ExtendWith(HomeStaysCleanExtension.class)
 class CorejRestApplicationTest
 {
 
