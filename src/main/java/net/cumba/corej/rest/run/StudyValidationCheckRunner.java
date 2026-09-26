@@ -232,7 +232,7 @@ public class StudyValidationCheckRunner implements CheckRunner
      */
     static List<String> resolveMetadataProducts(CheckRunRequest req)
     {
-        return ProductKeyResolver.resolveAllConfigured(req.metadataProducts(), null, null);
+        return ProductKeyResolver.resolveAllConfigured(req.metadataProducts());
     }
 
 
