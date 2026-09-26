@@ -14,6 +14,15 @@ import org.jspecify.annotations.Nullable;
  * configuration (system properties / env), not request fields — so they are intentionally absent
  * here.
  * </p>
+ *
+ * <p>
+ * {@code useCase} is the run's use case, one code of letters (e.g. {@code INDH}, {@code PROD},
+ * {@code NONCLIN}); blank means none. Rules whose {@code Scope.Use_Case} names only other use cases
+ * are not executed and are reported {@code SKIPPED} (owner ruling X1,
+ * {@code PLAN-use-case-scope-filter}); a list such as {@code "INDH, PROD"} is rejected with 400. ⚠
+ * The field's {@code @Schema} text is deliberately left as it is: changing it changes the OpenAPI
+ * document, which the web SPAs' generated types are checked against.
+ * </p>
  */
 @Schema(description = "Parameters for a check run over a session's staged files")
 public record CheckRunRequest(@Schema(description = "TIG use case (optional)") String useCase,
@@ -77,7 +86,7 @@ public record CheckRunRequest(@Schema(description = "TIG use case (optional)") S
      * {@code null} = use the service default). Keeps existing positional callers working.
      *
      * @param useCase
-     *            the TIG use case
+     *            the run's use case (one code; blank = none)
      * @param defineXmlFilename
      *            an uploaded define.xml to use as the metadata overlay
      * @param referenceDataFilenames

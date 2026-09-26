@@ -193,6 +193,15 @@ public class StudyValidationCheckRunner implements CheckRunner
         {
             throw new BadRunRequestException("'ruleThreads' must be >= 1");
         }
+        // PLAN-use-case-scope-filter T1-3: the run names ONE use case (blank = none). A list such
+        // as "INDH, PROD" would reach the engine as one code and exclude every rule that declares
+        // a use case; reject it here, with the engine's own wording, before the 201.
+        String useCase = StudyValidationParams.normalizeUseCase(req.useCase());
+        if (useCase != null && !StudyValidationParams.isWellFormedUseCase(useCase))
+        {
+            throw new BadRunRequestException(
+                    "'useCase': " + StudyValidationParams.useCaseError(useCase));
+        }
         if (!req.includeRules().isEmpty() && !req.excludeRules().isEmpty())
         {
             throw new BadRunRequestException(

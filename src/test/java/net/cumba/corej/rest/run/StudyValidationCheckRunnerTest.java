@@ -252,6 +252,56 @@ class StudyValidationCheckRunnerTest
     }
 
 
+    /** A request that differs from the legal minimal one only in its {@code useCase}. */
+    private static CheckRunRequest withUseCase(String useCase)
+    {
+        return withRulePackages(
+                new CheckRunRequest(useCase, null, null, null, null, null, null, null, null));
+    }
+
+
+    /**
+     * PLAN-use-case-scope-filter T1-3: a run names ONE use case. A list is rejected up front (400),
+     * naming the field and the value, instead of reaching the engine as one code that would exclude
+     * every rule declaring a use case.
+     */
+    @Test
+    void validate_aUseCaseList_isRejectedBeforeARunExists()
+    {
+        for (String bad : List.of("INDH, PROD", "IN DH", "INDH;"))
+        {
+            assertThatThrownBy(() -> StudyValidationCheckRunner.validate(withUseCase(bad), session))
+                    .as(bad).isInstanceOf(BadRunRequestException.class)
+                    .hasMessageStartingWith("'useCase': the use case must be a single code")
+                    .hasMessageContaining("'" + bad + "'");
+        }
+    }
+
+
+    /** One code of any case, padded or not, and a blank value (= none) all stay legal. */
+    @Test
+    void validate_aSingleUseCaseCode_orBlank_staysLegal()
+    {
+        for (String ok : java.util.Arrays.asList("INDH", " nonclin ", "   ", null))
+        {
+            assertThatCode(() -> StudyValidationCheckRunner.validate(withUseCase(ok), session))
+                    .as(String.valueOf(ok)).doesNotThrowAnyException();
+        }
+    }
+
+
+    /** The engine normalises what REST passes: a padded code arrives stripped, blank as none. */
+    @Test
+    void buildParams_normalisesTheUseCase()
+    {
+        assertThat(StudyValidationCheckRunner.buildParams(run(withUseCase(" PROD ")), session)
+                .useCase()).isEqualTo("PROD");
+        assertThat(
+                StudyValidationCheckRunner.buildParams(run(withUseCase("  ")), session).useCase())
+                        .isNull();
+    }
+
+
     /** A blank token is typed-but-meaningless and must be rejected, not silently dropped. */
     @Test
     void validate_blankMetadataProductToken_isRejected()
