@@ -254,8 +254,8 @@ public class StudyValidationCheckRunner implements CheckRunner
 
     /**
      * The single resolution path for {@link CheckRunRequest#metadataProducts()}: tokens resolve
-     * against the server's configured product catalogue (Phase 7b: pickle-cache keys unioned with
-     * the CDISC Library API's product list; full-key tokens resolve without either). Called by
+     * against the server's configured product catalogue (since cache P4 the unified metadata
+     * store's {@code MetadataProductCatalogue}; full-key tokens resolve without it). Called by
      * {@link #validate(CheckRunRequest, Session)} - to reject a bad token with a 400 before a run
      * exists - and by {@link #buildParams(CheckRun, Session)} - to hand the engine the resolved
      * keys. One method, same inputs, so the two sites cannot diverge.
