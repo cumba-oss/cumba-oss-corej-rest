@@ -218,9 +218,10 @@ public class MetaController
      *
      * <p>
      * Separated so the mapping is testable without an environment: the catalogue itself comes from
-     * the unified metadata store ({@code CDISC_METADATA_STORE} / {@code cdisc.metadata.store}), so
-     * a test asserting against the live catalogue would pass vacuously wherever no store is
-     * configured.
+     * the unified metadata store the runs read — the deployment's own target store
+     * ({@code corej.cache-seed.target-store}, via {@code configuredRunStore}) first, else
+     * {@code CDISC_METADATA_STORE}, else {@code cdisc.metadata.store} — so a test asserting against
+     * the live catalogue would pass vacuously wherever no store is configured.
      * </p>
      */
     static List<String> productOptions(Set<String> keys)

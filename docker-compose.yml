@@ -94,7 +94,8 @@ services:
       # --- upload size caps (spring.servlet.multipart.*) ---
       SPRING_SERVLET_MULTIPART_MAXFILESIZE: "${COREJ_MAX_UPLOAD:-512MB}"
       SPRING_SERVLET_MULTIPART_MAXREQUESTSIZE: "${COREJ_MAX_UPLOAD:-512MB}"
-      # --- CDISC Library API key (optional; blank = Library enrichment skipped) ---
+      # --- CDISC Library API key: seeding from the live Library ONLY
+      #     (corej.cache-seed.from-api); no validation run reads it ---
       CDISC_API_KEY: "${CDISC_API_KEY:-}"
       # --- extra JVM options, e.g. -Xmx2g (auto-applied by the JVM) ---
       JAVA_TOOL_OPTIONS: "${JAVA_TOOL_OPTIONS:-}"
