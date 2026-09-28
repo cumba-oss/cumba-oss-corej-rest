@@ -714,9 +714,11 @@
         <!-- `mvn verify`. Enable either by activating the profile by name     -->
         <!-- (`-P Pitest`) or by setting `-Dpitest.enabled=true`. Both paths   -->
         <!-- produce the per-module HTML/XML report under                      -->
-        <!-- `<module>/target/pit-reports/`. Every run is full (cold) —       -->
-        <!-- incremental history files require the commercial arcmutate       -->
-        <!-- plugin (see the <configuration> comment below).                   -->
+        <!-- `<module>/target/pit-reports/`. Runs are INCREMENTAL, not cold:   -->
+        <!-- the OSS pitest-history plugin reuses                              -->
+        <!-- `~/.pitest-history/<artifactId>/history.bin`, which `mvn clean`   -->
+        <!-- does not remove (see the <configuration> comment below). Delete   -->
+        <!-- that file to measure a module cold.                               -->
         <!--                                                                   -->
         <!-- Thresholds default to 0 (no gate); the `pitest-fail-on-error`     -->
         <!-- profile below activates real enforcement when the CI gate sets   -->
