@@ -45,12 +45,13 @@ import org.springframework.stereotype.Component;
  *
  * <p>
  * ⭐ An existing target is skipped only when it OPENS at this build's store format. A store of an
- * older format (every deployment's store after a format bump — 2 → 3 with
- * PLAN-define-ct-evaluation) is re-seeded with {@code refresh}, because the engine now REFUSES such
- * a store and aborts every run on it (T1-10 a), and "target exists ⇒ skip" would have stranded a
- * container volume on it forever (S11). ⚠ This runs only with {@code corej.cache-seed.enabled=true}
- * — the default is {@code false}, so a deployment that provisions its store out of band must
- * re-provision it itself (see {@code application.yaml} and {@code docker-compose.yml}).
+ * older format (every deployment's store after a format bump — 3 → 4 with
+ * PLAN-store-cdash-codelist-ids, 2 → 3 with PLAN-define-ct-evaluation before it) is re-seeded with
+ * {@code refresh}, because the engine now REFUSES such a store and aborts every run on it (T1-10
+ * a), and "target exists ⇒ skip" would have stranded a container volume on it forever (S11). ⚠ This
+ * runs only with {@code corej.cache-seed.enabled=true} — the default is {@code false}, so a
+ * deployment that provisions its store out of band must re-provision it itself (see
+ * {@code application.yaml} and {@code docker-compose.yml}).
  * </p>
  *
  * <p>

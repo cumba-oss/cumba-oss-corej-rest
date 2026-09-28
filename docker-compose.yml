@@ -61,8 +61,8 @@ services:
       #     file out of band and just point at it. With no store runs still succeed —
       #     every library-dependent rule SKIPs, loudly and by name. ⚠⚠ A store of an
       #     OLDER FORMAT is different: the engine refuses it and every run on it
-      #     FAILS ("must be re-seeded"). After a store format bump (2 -> 3 on
-      #     2026-09-26) an out-of-band store must be re-provisioned; with
+      #     FAILS ("must be re-seeded"). After a store format bump (3 -> 4 on
+      #     2026-09-28) an out-of-band store must be re-provisioned; with
       #     COREJ_CACHESEED_ENABLED=true the service re-seeds it in full at the next
       #     start-up by itself. A store written by a NEWER build is the other way
       #     round: left alone (a downgrade), every run on it fails with "upgrade this

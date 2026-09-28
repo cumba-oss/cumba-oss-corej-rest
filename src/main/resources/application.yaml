@@ -67,8 +67,9 @@ corej:
   #                                 # FORMAT, which the engine refuses outright (every run on it
   #                                 # aborts with "must be re-seeded"): with enabled: true it is
   #                                 # re-seeded in full at start-up whatever refresh says. A store
-  #                                 # format bump (2 -> 3 on 2026-09-26: codelist names and every
-  #                                 # remaining CDISC Library field) therefore needs, in a
+  #                                 # format bump (3 -> 4 on 2026-09-28: the CDASH fields'
+  #                                 # codelist C-codes; 2 -> 3 on 2026-09-26: codelist names and
+  #                                 # every remaining CDISC Library field) therefore needs, in a
   #                                 # deployment that keeps enabled: false and provisions the
   #                                 # store out of band, a RE-PROVISIONED store file - until then
   #                                 # every validation run fails naming the file and this remedy.
