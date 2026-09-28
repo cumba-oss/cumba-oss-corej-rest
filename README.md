@@ -378,8 +378,8 @@ discovered per run:
   ⚠ **Store format 4 (2026-09-28):** a store of an older format (3, or 2 from an earlier release) is
   refused — every run on it fails and `/api/meta/run-options` answers **503** naming the remedy —
   until it is re-provisioned, or re-seeded at start-up with `COREJ_CACHESEED_ENABLED=true` (no
-  `refresh` needed). A store written
-  by a NEWER build is left alone (a downgrade); only `COREJ_CACHESEED_REFRESH=true` replaces it.
+  `refresh` needed). A store written by a NEWER build is left alone (a downgrade); only
+  `COREJ_CACHESEED_REFRESH=true` replaces it.
   ⚠ A `corej-data/api-cache` left over from an earlier deployment is the **retired** web-API cache;
   nothing reads it, and the container says so once at startup.
 
