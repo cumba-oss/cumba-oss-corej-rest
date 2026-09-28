@@ -52,7 +52,7 @@
         <maven.build.timestamp.format>yyyy-MM-dd'T'HH:mm:ss</maven.build.timestamp.format>
         <timestamp>${maven.build.timestamp}</timestamp>
 
-        <mockito.agent></mockito.agent>
+        <mockito.agent>-javaagent:${org.mockito:mockito-core:jar}</mockito.agent>
 
         <!--
             Minimum line coverage enforced by the jacoco-maven-plugin
