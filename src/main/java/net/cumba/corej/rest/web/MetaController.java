@@ -217,9 +217,10 @@ public class MetaController
      * a stable picker.
      *
      * <p>
-     * Separated so the mapping is testable without an environment: the catalogue itself is built
-     * from {@code CDISC_PICKLE_CACHE_DIR} / {@code CDISC_API_CACHE}, so a test asserting against
-     * the live catalogue would pass vacuously wherever neither is configured.
+     * Separated so the mapping is testable without an environment: the catalogue itself comes from
+     * the unified metadata store ({@code CDISC_METADATA_STORE} / {@code cdisc.metadata.store}), so
+     * a test asserting against the live catalogue would pass vacuously wherever no store is
+     * configured.
      * </p>
      */
     static List<String> productOptions(Set<String> keys)
