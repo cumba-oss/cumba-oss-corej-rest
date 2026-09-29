@@ -29,9 +29,9 @@ The libraries this service consumes *are* on Central, released separately on the
 
 | Library | Version pinned here |
 |---|---|
-| `cumba-oss-commons` | `0.2.1` |
-| `cumba-oss-datatable` | `0.2.0` |
-| `cumba-oss-corej` | `0.3.0` |
+| `cumba-oss-commons` | `0.5.0-SNAPSHOT` |
+| `cumba-oss-datatable` | `0.5.0-SNAPSHOT` |
+| `cumba-oss-corej` | `0.6.0-SNAPSHOT` |
 
 (the `dependency.cumba-oss-*.version` properties in `pom.xml`). The web stack is Spring Boot
 `4.1.1` plus springdoc `3.1.0`.
@@ -55,11 +55,10 @@ The two releases are cut independently from the same tag by `.github/workflows/c
 `.gitea/workflows/main.yml`; the Gitea run additionally deploys to the internal Nexus. Nothing
 reaches Maven Central.
 
-⚠ **This repository has never cut a tag.** `GPG_PRIVATE_KEY` and `GPG_PASSPHRASE` are
-**organisation-level** secrets on `cumba-oss`, so they are inherited here rather than set per
-repository — but the signing path itself has never run in this repo, so the first tag is its
-first real test. The release job fails by name on an empty key rather than publishing unsigned
-assets.
+⚠ `GPG_PRIVATE_KEY` and `GPG_PASSPHRASE` are **organisation-level** secrets on `cumba-oss`, so
+they are inherited here rather than set per repository. The signing path has run for both tags cut
+so far, `v0.1.0` and `v0.2.0`: each GitHub release carries a `.asc` beside its zip and its jar. The
+release job fails by name on an empty key rather than publishing unsigned assets.
 
 ### Verifying a release asset
 
@@ -283,8 +282,8 @@ is used; afterwards `~/.m2/download-cache` serves it and `mvn -o` works.
 - **No CORE rule family.** Those rules are externally sourced and may not be redistributed as a
   set. Consequence: **the bundled corpus has no TIG coverage** — the only TIG package outside
   the CORE family is `rules-draft-tig-1-0`.
-- **The DRAFT family IS present, for now.** `v0.3.1` ships 47 packages, 15 of them
-  `rules-draft-*` — parked candidate rules, generated and tested but not promoted.
+- **No DRAFT family.** The pinned `v0.4.0` ships 32 packages, none of them `rules-draft-*` —
+  the parked candidate rules are generated and tested upstream but not released.
 
 ### The guards
 

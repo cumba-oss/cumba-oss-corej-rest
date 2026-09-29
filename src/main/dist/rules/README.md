@@ -23,12 +23,9 @@ the public corpus. Two things to know about its scope:
   set, so no cumba bundle ships them. Everything else is here. ⚠ A consequence worth stating:
   **the bundled corpus therefore has no TIG coverage** — the only TIG package outside the CORE
   family is `rules-draft-tig-1-0`, which is in the DRAFT family below.
-- **The DRAFT family IS present, for now.** Release `v0.3.1` ships 47 packages, 15 of them
-  `rules-draft-*`. These are **parked candidate rules**: fully generated, schema-validated and
-  executed by their test scenarios upstream, but not promoted, so their content can change and
-  they are not a basis for a regulatory submission. They are offered by `/api/meta/run-options`
-  like any other package, and are never selected for you. A future corpus release drops them from
-  the published archive, at which point a bundle built against that release will not have them.
+- **No DRAFT family.** Release `v0.4.0` ships 32 packages, none of them `rules-draft-*`. The
+  DRAFT rules are **parked candidate rules**: fully generated, schema-validated and executed by
+  their test scenarios upstream, but not promoted, and the published archive leaves them out.
 
 ## Replacing it with a different corpus version
 
