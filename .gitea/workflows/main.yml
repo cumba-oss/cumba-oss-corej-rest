@@ -49,6 +49,13 @@ jobs:
     outputs:
       version: ${{ steps.ver.outputs.version }}
     env:
+      # The rule corpus is downloaded from GitHub here, exactly as in the GitHub
+      # workflow. The pom's corpus-host-ci-server profile can fetch it from this CI
+      # server's own releases instead, switched on by setting
+      #   CUMBA_CORPUS_SERVER: ${{ github.server_url }}
+      #   CUMBA_GITEA_TOKEN:   <a read token for the corpus repository>
+      # It is DORMANT on purpose: the pinned sha256 values are the GitHub assets', and
+      # a corpus tag must first ship identical bytes on both hosts.
       NEXUS_USER: ${{ secrets.NEXUS_USER }}
       NEXUS_PASS: ${{ secrets.NEXUS_PASS }}
       # Maven CI gates shared by the cheap-to-medium passes (compile, unit

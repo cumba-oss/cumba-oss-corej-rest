@@ -147,9 +147,12 @@
             read it as a submodule pin and try to rewrite it. Do not rename these.
 
             ⚠⚠ FIVE poms carry these four properties — cumba-databrowser plus the four
-            client bundles — and they must agree, or the app and the clients validate the same
-            study against different rules. check_versions.sh asserts both the agreement and
-            that it found five.
+            client bundles. Tag and version must agree across all five, or the app and the
+            clients validate the same study against different rules. The sha256 values agree
+            within each HOST group: this bundle and its twin fetch from GitHub; the internal
+            bundles fetch the same tag from their own CI server, whose zips differ in bytes
+            (not in content). check_versions.sh CHECK 4 asserts all of that and that it found
+            five.
         -->
         <dependency.corej-rules.tag>v0.5.0</dependency.corej-rules.tag>
         <dependency.corej-rules.version>0.5.0</dependency.corej-rules.version>
@@ -175,6 +178,13 @@
             standard is always Define-XML.
         -->
         <dependency.corej-rules-define.sha256>020372c5339fccec147603dc9f68f016cf7ff2c4600eed22557ddcd2effea7a0</dependency.corej-rules-define.sha256>
+        <!--
+            The host the corpus is downloaded from. GitHub by default, for this repository's
+            GitHub workflow and for anyone building it outside. The corpus-host-ci-server
+            profile below switches it to the CI server's own releases when, and only when,
+            the environment names one.
+        -->
+        <corej.rules.server>https://github.com</corej.rules.server>
         <!-- jackson-annotations is released a patch digit behind the rest of
              Jackson (2.21, not 2.21.3); see dependencyManagement note below. -->
         <dependency.jackson-annotations.version>2.22</dependency.jackson-annotations.version>
@@ -1454,6 +1464,80 @@
                 </plugins>
             </build>
         </profile>
+        <!--
+            Fetch the rule corpus from the CI server that builds this repository instead of
+            GitHub. Activated by the PRESENCE of CUMBA_CORPUS_SERVER (a CI workflow sets it to
+            its own server URL), so no hostname is written here, the GitHub workflow keeps
+            today's behaviour, and an outside build needs nothing. When active it sends a read
+            token as an Authorization header (download-maven-plugin's serverId/preemptiveAuth
+            sends nothing over HTTPS) and fails first, by name, when the token is missing.
+            No header is ever sent to GitHub: the profile is off there.
+
+            ⚠ DORMANT: no workflow sets CUMBA_CORPUS_SERVER yet. The pinned sha256 values are
+            the GitHub assets', and a corpus tag released before its zips were made
+            reproducible ships different bytes on the two hosts, so an active switch would fail
+            the hash check. It is enabled once a corpus tag ships identical bytes on both.
+        -->
+        <profile>
+            <id>corpus-host-ci-server</id>
+            <activation>
+                <property>
+                    <name>env.CUMBA_CORPUS_SERVER</name>
+                </property>
+            </activation>
+            <properties>
+                <corej.rules.server>${env.CUMBA_CORPUS_SERVER}</corej.rules.server>
+                <cumba.gitea.token>${env.CUMBA_GITEA_TOKEN}</cumba.gitea.token>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-enforcer-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>require-ci-server-token</id>
+                                <phase>validate</phase>
+                                <goals><goal>enforce</goal></goals>
+                                <configuration>
+                                    <rules>
+                                        <requireProperty>
+                                            <property>cumba.gitea.token</property>
+                                            <regex>[^$\s]\S+</regex>
+                                            <message>No read token for the CI server's release assets: set CUMBA_GITEA_TOKEN</message>
+                                            <regexMessage>The read token for the CI server's release assets is set but is not token-shaped: it carries whitespace (a trailing space or newline) or is an unresolved ${...} placeholder. Fix CUMBA_GITEA_TOKEN</regexMessage>
+                                        </requireProperty>
+                                    </rules>
+                                    <fail>true</fail>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>com.googlecode.maven-download-plugin</groupId>
+                        <artifactId>download-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>download-corej-rules</id>
+                                <configuration>
+                                    <headers>
+                                        <Authorization>token ${cumba.gitea.token}</Authorization>
+                                    </headers>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>download-corej-rules-define</id>
+                                <configuration>
+                                    <headers>
+                                        <Authorization>token ${cumba.gitea.token}</Authorization>
+                                    </headers>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
     </profiles>
 
     <name>Cumba OSS coreJ REST API</name>
@@ -2581,8 +2665,9 @@
 
                 ⚠ The download is cached under ~/.m2/download-cache, so `clean` does not
                 re-fetch and `mvn -o` builds off the cache. The FIRST build of a new pin needs
-                network, which is new for this repository's CI: both workflows must be able to
-                reach github.com.
+                network. By default it comes from github.com (corej.rules.server), so both
+                workflows must be able to reach it. The corpus-host-ci-server profile can point
+                it at the CI server's own releases instead (see that profile).
 
                 ⚠ generate-resources, not prepare-package: the corpus is then on disk before
                 `test`, so a test (and src/test/smoke.sh's assembled-bundle checks) can read the
@@ -2604,7 +2689,7 @@
                         <phase>generate-resources</phase>
                         <goals><goal>wget</goal></goals>
                         <configuration>
-                            <url>https://github.com/cumba-oss/cumba-oss-corej-rules/releases/download/${dependency.corej-rules.tag}/cumba-oss-corej-rules-${dependency.corej-rules.version}.zip</url>
+                            <url>${corej.rules.server}/cumba-oss/cumba-oss-corej-rules/releases/download/${dependency.corej-rules.tag}/cumba-oss-corej-rules-${dependency.corej-rules.version}.zip</url>
                             <sha256>${dependency.corej-rules.sha256}</sha256>
                             <unpack>true</unpack>
                             <outputDirectory>${project.build.directory}/corej-rules</outputDirectory>
@@ -2616,7 +2701,7 @@
                         <phase>generate-resources</phase>
                         <goals><goal>wget</goal></goals>
                         <configuration>
-                            <url>https://github.com/cumba-oss/cumba-oss-corej-rules/releases/download/${dependency.corej-rules.tag}/cumba-oss-corej-rules-define-${dependency.corej-rules.version}.zip</url>
+                            <url>${corej.rules.server}/cumba-oss/cumba-oss-corej-rules/releases/download/${dependency.corej-rules.tag}/cumba-oss-corej-rules-define-${dependency.corej-rules.version}.zip</url>
                             <sha256>${dependency.corej-rules-define.sha256}</sha256>
                             <unpack>true</unpack>
                             <outputDirectory>${project.build.directory}/corej-rules-define</outputDirectory>
