@@ -282,7 +282,7 @@ is used; afterwards `~/.m2/download-cache` serves it and `mvn -o` works.
 - **No CORE rule family.** Those rules are externally sourced and may not be redistributed as a
   set. Consequence: **the bundled corpus has no TIG coverage** — the only TIG package outside
   the CORE family is `rules-draft-tig-1-0`.
-- **No DRAFT family.** The pinned `v0.4.0` ships 32 packages, none of them `rules-draft-*` —
+- **No DRAFT family.** The pinned `v0.5.0` ships 32 packages, none of them `rules-draft-*` —
   the parked candidate rules are generated and tested upstream but not released.
 
 ### The guards

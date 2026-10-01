@@ -106,14 +106,14 @@
         <dependency.junit.jupiter.version>6.1.3</dependency.junit.jupiter.version>
         <dependency.mockito.version>5.23.0</dependency.mockito.version>
         <dependency.lombock.version>1.18.48</dependency.lombock.version>
-        <dependency.cumba-oss-commons.version>0.5.0-SNAPSHOT</dependency.cumba-oss-commons.version>
-        <dependency.cumba-oss-datatable.version>0.5.0-SNAPSHOT</dependency.cumba-oss-datatable.version>
+        <dependency.cumba-oss-commons.version>0.5.0</dependency.cumba-oss-commons.version>
+        <dependency.cumba-oss-datatable.version>0.5.0</dependency.cumba-oss-datatable.version>
 
         <!--
             The coreJ engine, released from cumba-oss-corej on its own cadence. These are
             EXTERNAL artifacts here - this repository holds only the clients.
         -->
-        <dependency.cumba-oss-corej.version>0.6.0-SNAPSHOT</dependency.cumba-oss-corej.version>
+        <dependency.cumba-oss-corej.version>0.6.0</dependency.cumba-oss-corej.version>
 
         <!-- REST stack -->
         <dependency.spring-boot.version>4.1.1</dependency.spring-boot.version>
@@ -151,8 +151,8 @@
             study against different rules. check_versions.sh asserts both the agreement and
             that it found five.
         -->
-        <dependency.corej-rules.tag>v0.4.0</dependency.corej-rules.tag>
-        <dependency.corej-rules.version>0.4.0</dependency.corej-rules.version>
+        <dependency.corej-rules.tag>v0.5.0</dependency.corej-rules.tag>
+        <dependency.corej-rules.version>0.5.0</dependency.corej-rules.version>
         <!--
             How many rules-draft-*.json the PINNED release ships. Asserted by exact equality in
             verify-corej-rules-staged, so a change in the corpus's release scope cannot pass
@@ -163,7 +163,7 @@
             dependency.corej-rules.tag together.
         -->
         <corej.rules.draft-packages>0</corej.rules.draft-packages>
-        <dependency.corej-rules.sha256>facc58cf87b750d3fd926213897ccf324ea5ee76f8c46efa974f8a3c5fb37ff1</dependency.corej-rules.sha256>
+        <dependency.corej-rules.sha256>6476cd0ff539d2d6ea231c370b5c6cb60e437d66f4e06ea14cf8efd197e8f226</dependency.corej-rules.sha256>
         <!--
             The Define-XML conformance corpus: a SECOND asset of the SAME release, hence no
             tag or version of its own, only its own hash.
@@ -174,7 +174,7 @@
             (family, standard, version), this one (family, version), since for Define-XML the
             standard is always Define-XML.
         -->
-        <dependency.corej-rules-define.sha256>79893d8126e0f3a4372de8e737c6442645181293ae65fdabeb9f22e570e25579</dependency.corej-rules-define.sha256>
+        <dependency.corej-rules-define.sha256>020372c5339fccec147603dc9f68f016cf7ff2c4600eed22557ddcd2effea7a0</dependency.corej-rules-define.sha256>
         <!-- jackson-annotations is released a patch digit behind the rest of
              Jackson (2.21, not 2.21.3); see dependencyManagement note below. -->
         <dependency.jackson-annotations.version>2.22</dependency.jackson-annotations.version>
