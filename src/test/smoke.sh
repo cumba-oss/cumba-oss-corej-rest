@@ -55,7 +55,9 @@ set -euo pipefail
 # curl is deliberately NOT in this list; it is genuinely optional (see http_get).
 # ⚠ cut was added on 2026-09-17 with the corpus-load probe below, which reads the
 # package short names out of the service's own JSON.
-for tool in cat cut env find grep java ls mkdir mktemp rm seq sleep sort tail timeout wc; do
+# ⚠ tr was added on 2026-10-03: the EXECUTION_ERROR message extraction flattens the
+# report onto one line first, so a pretty-printed report yields the message too.
+for tool in cat cut env find grep java ls mkdir mktemp rm seq sleep sort tail timeout tr wc; do
     command -v "$tool" >/dev/null 2>&1 \
         || { echo "smoke: required tool not found: $tool" >&2; exit 1; }
 done
@@ -345,13 +347,22 @@ esac
 # ⛔ A LOAD FAILURE IS NOT ALWAYS THROWN (2026-10-03). The engine files a rule that is
 # definitionally invalid — an undeclared `&NAME&` token, a forward binding reference,
 # an unknown key — onto the rule as a RECORDED load error and keeps going: the run
-# SUCCEEDS, and the rule surfaces only in the report, as one
-# `"status":"EXECUTION_ERROR"` row per dataset. Every outcome above is blind to that,
+# SUCCEEDS, and the rule surfaces only in the report, as its Rules_Report row (one row
+# per rule) with `"status":"EXECUTION_ERROR"`. Every outcome above is blind to that,
 # so a corpus with dead rules printed `smoke: OK`. So each succeeded run's report
 # (GET /api/checks/{id}/report, byte-identical to the CLI's report file) is read too,
 # and ANY EXECUTION_ERROR row is fatal. That also catches a rule that fails at RUN
 # time, which on this one-row dataset is just as much a defect — measured on the
 # published corpus: zero EXECUTION_ERROR rows.
+#
+# ⛔ EVERY PACKAGE IS ACCOUNTED FOR (2026-10-03, review lane 4). A package ends in
+# exactly one of two modelled states — SUCCEEDED, or REFUSED with one of the two named
+# selection refusals — and every other outcome is fatal, so `succeeded + refused ==
+# npkg` is asserted after the loop, and the refused packages are printed by name: a
+# refusal is a package whose rules did NOT run, and the operator must see which ones.
+# Today the ratchet cannot fail (every other branch exits first); it is here so that a
+# future branch that forgets to exit or to count cannot pass silently. The CLI twin's
+# ratchet is the one with a live arm (a run that exits 0 without completing).
 #
 # ⚠ Each run is ~30-90 ms in the already-warm service, so the whole sweep costs a
 # couple of seconds — unlike the CLI's equivalent, which pays a JVM start per package.
@@ -482,14 +493,18 @@ for p in $packages; do
             n="$(printf '%s' "$report" \
                     | grep -oE '"status"[[:space:]]*:[[:space:]]*"EXECUTION_ERROR"' | wc -l)" || true
             if [ "$n" -gt 0 ]; then
-                # The row's message precedes its status; a load error's message opens
-                # with the rule id in brackets, so the first one names rule and cause.
-                why="$(printf '%s' "$report" \
+                # BEST-EFFORT, for the operator only — the count above is the verdict.
+                # The report is flattened onto one line first (tr), so a pretty-printed
+                # report yields the message too; it still assumes the row's message
+                # immediately precedes its status, as the report writer orders the keys.
+                # A load error's message opens with the rule id in brackets, so it names
+                # rule and cause.
+                why="$(printf '%s' "$report" | tr '\n' ' ' \
                         | grep -oE '"message"[[:space:]]*:[[:space:]]*"([^"\\]|\\.)*"[[:space:]]*,[[:space:]]*"status"[[:space:]]*:[[:space:]]*"EXECUTION_ERROR"' \
                         | head -1 \
                         | sed -E 's/^"message"[[:space:]]*:[[:space:]]*"//; s/"[[:space:]]*,[[:space:]]*"status".*$//')" || true
                 recorded="$recorded
-smoke:   rules-$p.json: $n EXECUTION_ERROR row(s), first: ${why:-no message on the row}"
+smoke:   rules-$p.json: $n EXECUTION_ERROR row(s), first: ${why:-no message found next to the status (best-effort extraction)}"
                 nrecorded=$((nrecorded + 1))
             fi ;;
         *'"status":"FAILED"'*)
@@ -579,6 +594,13 @@ if [ "$nrecorded" -gt 0 ]; then
     exit 1
 fi
 
+# ⛔ ACCOUNTING (see the ⛔ note above the loop): every offered package either succeeded
+# or was refused with a named refusal.
+if [ $((succeeded + nrefused)) -ne "$npkg" ]; then
+    echo "smoke: $succeeded succeeded + $nrefused refused != $npkg packages offered by /api/meta/run-options — a run outcome this probe neither failed nor counted." >&2
+    exit 1
+fi
+
 # ⚠ NON-VACUITY across the corpus: the recorded-load-error check read at least one
 # rule row, so an empty Rules_Report everywhere cannot pass for a clean corpus.
 [ "$nrows" -ge 1 ] \
@@ -601,6 +623,6 @@ echo "smoke:      and /api/meta/run-options offers $pkgcount rule packages,"
 echo "smoke:      ALL $npkg of which the engine loaded; $succeeded ran to completion"
 # The header promises the third outcome is "recorded AND reported". Reported here.
 if [ "$nrefused" -gt 0 ]; then
-    echo "smoke:      $nrefused declined to pick a metadata product (a legitimate refusal):"
+    echo "smoke:      $nrefused refused with a named selection refusal (loaded, NOT run):"
     echo "${refused#$'\n'}"
 fi
