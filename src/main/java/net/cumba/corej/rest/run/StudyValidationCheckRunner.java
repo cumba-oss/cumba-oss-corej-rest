@@ -442,14 +442,14 @@ public class StudyValidationCheckRunner implements CheckRunner
      *
      * <p>
      * ⛔ <b>Parquet in particular is a ruled category error, not a missing feature.</b> Since wave
-     * 38 this module depends on {@code cumba-oss-datatable-provider-parquet}, so {@code .parquet}
-     * <em>datasets</em> load — yet that module registers only an {@code IProviderSupplier} and no
+     * 38 this module depends on the Parquet provider module, so {@code .parquet} <em>datasets</em>
+     * load — yet that module registers only an {@code IProviderSupplier} and no
      * {@code ILibrarySupplier}, because a single {@code .parquet} file has no member namespace for
      * a container to enumerate. So a {@code .parquet} entry in {@code referenceDataFilenames} is
-     * still refused here, deliberately. The same wave added
-     * {@code cumba-oss-datatable-provider-{sas,xlsx}}, which <em>do</em> register library
-     * suppliers, widening the accepted set to {@code cdt, dblib, xls, xlsx, xml, xpt} —
-     * automatically, with no change to this method, because the set is read from the SPI. Pinned by
+     * still refused here, deliberately. The same wave added the SAS and XLSX provider modules,
+     * which <em>do</em> register library suppliers, widening the accepted set to
+     * {@code cdt, dblib, xls, xlsx, xml, xpt} — automatically, with no change to this method,
+     * because the set is read from the SPI. Pinned by
      * {@code StudyValidationCheckRunnerTest#publishedLibraryFormatsIncludeXptXlsAndXlsx} and
      * {@code #parquetReferenceDataIsStillRejectedAfterTheProviderWasAdded}.
      * </p>

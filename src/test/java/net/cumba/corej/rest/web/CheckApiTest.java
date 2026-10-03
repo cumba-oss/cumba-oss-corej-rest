@@ -396,11 +396,11 @@ class CheckApiTest
 
 
     /**
-     * ⚑ The wave-38 widening, seen through the HTTP layer (W37-D1). Registering
-     * {@code cumba-oss-datatable-provider-sas} / {@code -xlsx} in this module added
-     * {@code XptLibrarySupplier} and {@code ExcelLibrarySupplier} to the library SPI, so
-     * {@code .xpt} and {@code .xlsx} reference data now gets a <b>201</b>. Before wave 38 both were
-     * a 400 here — and, before the format check existed at all, a mid-run 500.
+     * ⚑ The wave-38 widening, seen through the HTTP layer (W37-D1). Registering the SAS and XLSX
+     * provider modules in this module added {@code XptLibrarySupplier} and
+     * {@code ExcelLibrarySupplier} to the library SPI, so {@code .xpt} and {@code .xlsx} reference
+     * data now gets a <b>201</b>. Before wave 38 both were a 400 here — and, before the format
+     * check existed at all, a mid-run 500.
      *
      * <p>
      * The set membership behind this status code is asserted directly in
@@ -423,12 +423,12 @@ class CheckApiTest
 
 
     /**
-     * ⛔ …and the boundary of that widening, also through HTTP.
-     * {@code cumba-oss-datatable-provider-parquet} is on the classpath since wave 38, but it
-     * registers only an {@code IProviderSupplier}, never an {@code ILibrarySupplier} — {@code F3}'s
-     * ruled <b>category error</b>: a library is a container of tables and a single {@code .parquet}
-     * file has no member namespace. So {@code .parquet} <i>datasets</i> load while {@code .parquet}
-     * <i>reference data</i> stays a 400. <b>This is intended; do not "fix" it.</b>
+     * ⛔ …and the boundary of that widening, also through HTTP. The Parquet provider module is on
+     * the classpath since wave 38, but it registers only an {@code IProviderSupplier}, never an
+     * {@code ILibrarySupplier} — {@code F3}'s ruled <b>category error</b>: a library is a container
+     * of tables and a single {@code .parquet} file has no member namespace. So {@code .parquet}
+     * <i>datasets</i> load while {@code .parquet} <i>reference data</i> stays a 400. <b>This is
+     * intended; do not "fix" it.</b>
      */
     @Test
     void startWithParquetReferenceDataStillReturns400DespiteTheProviderBeingPresent()

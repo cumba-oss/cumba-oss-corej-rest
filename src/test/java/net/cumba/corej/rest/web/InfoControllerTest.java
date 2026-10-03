@@ -8,12 +8,13 @@ import org.junit.jupiter.api.Test;
  * Unit tests for {@link InfoController}.
  *
  * <p>
- * ⚑ Regression guard: {@code /api/info} reported {@code version: "unknown"} because the controller
- * passed its SERVICE name ({@code corej-cdisc-rest}) to {@code VersionInfo.forArtifact}, which
- * matches the {@code artifactId} recorded in each jar's filtered {@code version.properties} —
- * {@code cumba-oss-corej-rest} for this module. {@code OpenApiDocTest} did not catch it: it asserts
- * the OpenAPI document's {@code info.version}, which is the hand-maintained
- * {@code OpenApiConfig.API_VERSION}, not the build version this endpoint publishes.
+ * ⚑ Regression guard: {@code /api/info} reports {@code version: "unknown"} if the controller passes
+ * its SERVICE name — the published {@code spring.application.name} — to
+ * {@code VersionInfo.forArtifact}, which matches the {@code artifactId} recorded in each jar's
+ * filtered {@code version.properties}. The two strings differ, so such a call matches no jar.
+ * {@code OpenApiDocTest} does not catch it: it asserts the OpenAPI document's {@code info.version},
+ * which is the hand-maintained {@code OpenApiConfig.API_VERSION}, not the build version this
+ * endpoint publishes.
  * </p>
  */
 class InfoControllerTest

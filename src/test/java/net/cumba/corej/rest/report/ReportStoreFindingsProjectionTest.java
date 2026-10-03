@@ -72,7 +72,7 @@ class ReportStoreFindingsProjectionTest
     {
         ReportStore store = newStore(aDir);
         // Rendered through the report SPI, exactly as RunExecutor does in production: this also
-        // proves cumba-oss-corej-report-json is genuinely on the REST classpath (Fix #224).
+        // proves the JSON report-writer module is genuinely on the REST classpath (Fix #224).
         ServiceReportManager manager = ServiceReportManager.getInstance();
         ReportSections sections = new ReportAssembler().report(mixedReport()).sections();
         ByteArrayOutputStream v1 = new ByteArrayOutputStream();

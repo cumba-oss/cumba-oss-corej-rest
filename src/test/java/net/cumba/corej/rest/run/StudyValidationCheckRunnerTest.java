@@ -377,8 +377,8 @@ class StudyValidationCheckRunnerTest
      * variable: a JVM cannot set its own environment, so the property is the only ambient tier a
      * test can install — and it ranks one <em>below</em> {@code CDISC_METADATA_STORE}. Losing to it
      * before the fix therefore implies losing to the environment variable a fortiori, so proving
-     * the weaker case proves the reported one. (Same argument as the engine-side test in
-     * {@code cumba-oss-corej}.)
+     * the weaker case proves the reported one. (Same argument as the engine-side test in the coreJ
+     * engine.)
      * </p>
      */
     @Test
@@ -905,7 +905,7 @@ class StudyValidationCheckRunnerTest
     }
 
     // ------------------------------------------------------------------
-    // wave 38 / W37-D1: registering cumba-oss-datatable-provider-{sas,xlsx,parquet}
+    // wave 38 / W37-D1: registering the SAS, XLSX and Parquet providers
     // in this module widened what reference data the server accepts.
     // (PLAN-reference-data-filenames-validation)
     // ------------------------------------------------------------------
@@ -1034,11 +1034,11 @@ class StudyValidationCheckRunnerTest
      * ⛔⛔ <b>Deliberate, not an oversight — do not "fix" this.</b>
      *
      * <p>
-     * {@code cumba-oss-datatable-provider-parquet} is on this module's classpath since wave 38, and
-     * it registers <b>only</b> an {@code IProviderSupplier} — no {@code ILibrarySupplier}. That is
-     * {@code F3}'s ruled <b>category error</b>: a data library is a <i>container</i> of tables, and
-     * a single {@code .parquet} file has no member namespace to enumerate, so there is nothing for
-     * a library supplier to open. Adding one would have to invent a one-table container.
+     * The Parquet provider module is on this module's classpath since wave 38, and it registers
+     * <b>only</b> an {@code IProviderSupplier} — no {@code ILibrarySupplier}. That is {@code F3}'s
+     * ruled <b>category error</b>: a data library is a <i>container</i> of tables, and a single
+     * {@code .parquet} file has no member namespace to enumerate, so there is nothing for a library
+     * supplier to open. Adding one would have to invent a one-table container.
      * </p>
      *
      * <p>

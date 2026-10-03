@@ -26,10 +26,11 @@ public class InfoController
      *
      * <p>
      * ⛔ Deliberately <b>not</b> {@link #SERVICE}: the service name is the published
-     * {@code spring.application.name} and is unrelated to the Maven coordinates. Passing it here
-     * matched no {@code version.properties} on the classpath, so the endpoint reported
-     * {@code version: "unknown"}. This constant must track {@code <artifactId>} in this module's
-     * pom; it is independent of {@code ${revision}}, so a version bump cannot break it.
+     * {@code spring.application.name} and is unrelated to the Maven coordinates. The two strings
+     * differ, so passing the service name here would match no {@code version.properties} on the
+     * classpath, and the endpoint would silently report {@code version: "unknown"}. This constant
+     * must track {@code <artifactId>} in this module's pom; it is independent of
+     * {@code ${revision}}, so a version bump cannot break it.
      * </p>
      */
     private static final String ARTIFACT_ID = "cumba-oss-corej-rest";
