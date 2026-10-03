@@ -16,8 +16,10 @@ version that is out of date, not this one.
 
 ## What is in it, and what is not
 
-The corpus comes from [`cumba-oss-corej-rules`](https://github.com/cumba-oss/cumba-oss-corej-rules),
-which is the public corpus. Three things to know about its scope:
+The corpus is the pinned release asset of `cumba-oss-corej-rules`, which is the public corpus. It
+is downloaded at build time from the host this repository's `pom.xml` names as
+`corej.rules.server`, and verified against the `sha256` pinned beside it. Three things to know
+about its scope:
 
 - **No CORE rule family.** Those rules are externally sourced and may not be redistributed as a
   set, so no cumba corpus carries them and no cumba bundle ships them. Everything else is here.
