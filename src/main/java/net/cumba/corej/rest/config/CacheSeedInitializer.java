@@ -201,6 +201,8 @@ public class CacheSeedInitializer implements ApplicationRunner
             LOG.info("Metadata store seeded: {}", report.summary());
             report.ctPackagesMissed().forEach(m -> LOG.warn("  store seed, missing: {}", m));
             report.warnings().forEach(w -> LOG.warn("  store seed: {}", w));
+            // The summary only counts stale errata; their ids and reasons are the details.
+            report.details().forEach(d -> LOG.info("  store seed, detail: {}", d));
             publishDefaultIfUnconfigured(target);
         }
         catch (IOException | RuntimeException e)
