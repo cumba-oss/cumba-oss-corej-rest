@@ -30,6 +30,9 @@
 # service exposes no equivalent endpoint, so the jar-count floor below is the only
 # backstop here. Do not read `smoke: OK` as "every jar is present".
 #
+# ⚑ The twin is the same script with the other bundle names. The two are meant to
+# stay in step: a fix to one belongs in the other.
+#
 # Usage: smoke.sh <path-to-exploded-bundle>
 
 set -euo pipefail
@@ -50,7 +53,9 @@ set -euo pipefail
 # a missing `wc` exits 127 with NO message at all.
 #
 # curl is deliberately NOT in this list; it is genuinely optional (see http_get).
-for tool in cat env find grep java ls mkdir mktemp rm seq sleep sort tail timeout wc; do
+# ⚠ cut was added on 2026-09-17 with the corpus-load probe below, which reads the
+# package short names out of the service's own JSON.
+for tool in cat cut env find grep java ls mkdir mktemp rm seq sleep sort tail timeout wc; do
     command -v "$tool" >/dev/null 2>&1 \
         || { echo "smoke: required tool not found: $tool" >&2; exit 1; }
 done
@@ -82,11 +87,11 @@ done
 # that lost it degrades to an empty package list, and a count alone passes straight
 # over that.
 #
-# ⚠ These floors are databrowser-meta/build_distribution.sh's MIN_CORE_RULES (28) and
+# ⚠ These floors are the distribution build's MIN_CORE_RULES (28) and
 # MIN_DEFINE_PKGS (4), so the app and the clients move together. They are floors, not
-# counts — v0.3.1 stages 47 and 4 — and they are NOT the place to encode which
-# families shipped. The exact DRAFT-package ratchet lives in pom.xml, where the pin it
-# tracks lives; duplicating that number here would make it two places to bump.
+# counts, and they are NOT the place to encode which families shipped. The exact
+# DRAFT-package ratchet lives in pom.xml, where the pin it tracks lives; duplicating
+# that number here would make it two places to bump.
 for corpus in "rules:rules-*.json:28" "rules-define:rules-define-*.json:4"; do
     dir="${corpus%%:*}"; rest="${corpus#*:}"; glob="${rest%%:*}"; floor="${rest##*:}"
     [ -f "$BUNDLE/$dir/packages.json" ] \
@@ -247,12 +252,12 @@ if grep -q '^bootstrap: ' "$log"; then
 fi
 [ -n "$body" ] || fail "no response from /api/info on port $port within 120s"
 
-# ⚠ MATCH THE FIELD, NOT A LOOSE SUBSTRING. InfoController.SERVICE is
-# "corej-cdisc-rest" here and "corej-rest" in the internal twin, and it is
-# deliberately NOT the artifactId (see the ⛔ note on ARTIFACT_ID in
-# InfoController). The loose form this replaces would also be satisfied by a payload
-# that merely mentions the name elsewhere — and porting it to the twin, where the
-# spelling differs, failed a perfectly good bundle (measured 2026-09-11).
+# ⚠ THE SERVICE NAME DIFFERS BETWEEN THE TWINS. InfoController.SERVICE is
+# "corej-rest" in the internal service and "corej-cdisc-rest" in the published one,
+# and it is deliberately NOT the artifactId (see the ⛔ note on ARTIFACT_ID in
+# InfoController). A port that kept the other twin's spelling failed on a perfectly
+# good bundle — measured 2026-09-11. Match the field, not a loose substring, so a
+# payload that merely mentions the name elsewhere cannot satisfy it.
 case "$body" in
     *'"service":"corej-cdisc-rest"'*) ;;
     *) fail "unexpected /api/info payload: $body" ;;
@@ -263,20 +268,20 @@ esac
 # resolved, offers those packages to a client. MetaController.packages() builds the
 # list from packages.json in StudyValidationService.effectiveRulesDir(), so the two
 # can genuinely disagree — a corpus staged into the bundle that the .conf does not
-# point at satisfies every file check and fails only here. Measured: sabotaging the
-# bundle's .conf that way leaves every check above green.
+# point at satisfies the file checks and fails here, which is the case the CLI's
+# equivalent probe could NOT construct.
 #
 # ⚠ An empty list is the failure mode to catch, and it is well-formed JSON: the
 # endpoint answers 200 with "packages":[] on a service that can validate nothing,
 # so requiring the KEY would pass on exactly that. Anchor on the opening of a first
 # ELEMENT — "packages":[{ — which an empty array cannot produce.
 #
-# ⚠ Not a field name. Keying on a component of PackageOption is a second thing to
-# keep in step with the API; the array's own shape is not. (The internal twin's first
-# version required "shortName" and failed on a good bundle offering 47 packages —
-# that component serialises as "name".)
+# ⚠ Not a field name. The first version required "shortName" and failed on a
+# perfectly good bundle: MetaController.PackageOption
+# serialises that component as "name". A field name is a second thing to keep in
+# step with the API; the array's own shape is not.
 # ⚠ A SEPARATE VARIABLE, not $body — the final banner below prints the /api/info
-# payload, and reusing $body here would make it print the run-options payload.
+# payload, and reusing $body here made it print the run-options payload instead.
 opts=""
 if ! opts="$(http_get /api/meta/run-options)" || [ -z "$opts" ]; then
     fail "no response from /api/meta/run-options on port $port"
@@ -286,6 +291,304 @@ case "$opts" in
     *) fail "the service offers NO rule packages — rules/ reached the zip but the running service does not see a usable corpus there. /api/meta/run-options -> ${opts}" ;;
 esac
 
+
+# ---- THE ENGINE ACTUALLY LOADS AND RUNS THE CORPUS ---------------------------
+#
+# ⛔ WHY THIS EXISTS, 2026-09-17. Everything above — the find-based floors, the
+# antrun verify-corej-rules-staged guard in pom.xml, /api/meta/run-options, even
+# /api/meta/rules — reads the corpus as FILES or as a raw JSON tree. None of them
+# binds a rule to net.cumba.corej.core.model.Rule, which is where a corpus the
+# engine cannot parse is rejected. Most packages of the corpus pinned at the time
+# still carried the retired `Operations:` block, the rejection is thrown from a
+# Jackson setter, and ONE legacy rule kills the whole rules-<family>.json — with
+# `smoke: OK` printed over it and /api/meta/run-options happily offering every one.
+#
+# So this stages a one-row dataset and starts a REAL check run for EVERY package the
+# service offers, which is the only path that deserialises rules.
+#
+# ⭐ THE PACKAGE NAMES COME FROM THE SERVICE, never from a literal — the list this
+# very bundle offers a client. A hard-coded name is a false alarm waiting for the
+# corpus to legitimately stop shipping that package, and it leaves every other
+# package unchecked.
+#
+# ⚠ A FAILED RUN IS NOT AUTOMATICALLY A LOAD FAILURE. A package declaring several
+# TIG legs makes the run refuse with "name one with -mp" — a legitimate
+# multi-standard refusal, after the package was loaded (the DRAFT family's
+# draft-tig-1-0 was such a package; the published corpus carries no DRAFT family,
+# so today every package runs). The discriminator is the
+# Jackson binding signature in the message (the RulePackage[...] reference chain);
+# anything else is recorded and reported, and execution is required of the corpus as
+# a WHOLE: at least one package must reach SUCCEEDED with a dataset processed.
+#
+# ⭐⭐ THREE outcomes, not two (review round 2, R2-9). Until this fix the third —
+# "FAILED, but not with the Jackson signature" — was written to a variable that was
+# never read again, so a bundle whose corpus LOADS cleanly and whose runs then all
+# fail at EXECUTION (an unreadable staged dm.csv, a missing metadata store, an NPE
+# inside a rule, a broken report writer) printed `smoke: OK … ALL N of which the
+# engine loaded; 1 ran to completion` with N-1 failures unread. That is the same
+# defect probe 1 was written to end, one layer further in.
+#
+# The split mirrors the CLI twin. The CLI accepts exit 0 (clean run) or exit 2 and
+# keys on the same two `Error:` messages this probe keys on, and FAILS on anything
+# else; here the selection refusal is recognised by the two messages
+# StudyValidationService raises for it, and it is reported in the banner rather than
+# swallowed. Every other run failure is fatal.
+#
+# ⚠ Do NOT widen the refusal signature to "any FAILED that is not Jackson". That is
+# precisely the swallow-everything behaviour being removed; an outcome this probe
+# cannot name is an outcome it has not checked.
+#
+# ⚠⚠ And do NOT widen it back to the shared remedy sentence `-mp / --metadata-products`
+# (review round 3, H-1) — a THIRD raise site prints that same remedy for a CORPUS
+# fault. See the arm below.
+#
+# ⛔ A LOAD FAILURE IS NOT ALWAYS THROWN (2026-10-03). The engine files a rule that is
+# definitionally invalid — an undeclared `&NAME&` token, a forward binding reference,
+# an unknown key — onto the rule as a RECORDED load error and keeps going: the run
+# SUCCEEDS, and the rule surfaces only in the report, as one
+# `"status":"EXECUTION_ERROR"` row per dataset. Every outcome above is blind to that,
+# so a corpus with dead rules printed `smoke: OK`. So each succeeded run's report
+# (GET /api/checks/{id}/report, byte-identical to the CLI's report file) is read too,
+# and ANY EXECUTION_ERROR row is fatal. That also catches a rule that fails at RUN
+# time, which on this one-row dataset is just as much a defect — measured on the
+# published corpus: zero EXECUTION_ERROR rows.
+#
+# ⚠ Each run is ~30-90 ms in the already-warm service, so the whole sweep costs a
+# couple of seconds — unlike the CLI's equivalent, which pays a JVM start per package.
+#
+# ⚑ The CLI has the matching probe in its own src/test/smoke.sh; the two are meant to
+# stay in step.
+
+# POST, sharing http_get's transport rules: curl when present, /dev/tcp otherwise.
+# The body is always built here (multipart included), so both branches send the
+# same bytes and only one of them can be wrong.
+http_post() {
+    local path="$1" ct="$2" body="$3" raw len
+    if command -v curl >/dev/null 2>&1; then
+        printf '%s' "$body" | curl -fsS -m 30 -X POST -H "Content-Type: $ct" \
+            --data-binary @- "http://127.0.0.1:$port$path" 2>/dev/null
+        return
+    fi
+    len="$(printf '%s' "$body" | wc -c)"
+    # ⛔ A brace group, not a subshell — fd 3 must survive into `cat <&3` below.
+    # See the same note on http_get.
+    { exec 3<>"/dev/tcp/127.0.0.1/$port"; } 2>/dev/null || return 1
+    printf 'POST %s HTTP/1.0\r\nHost: 127.0.0.1:%s\r\nContent-Type: %s\r\nContent-Length: %s\r\nConnection: close\r\n\r\n' \
+        "$path" "$port" "$ct" "$len" >&3
+    printf '%s' "$body" >&3
+    raw="$(timeout 30 cat <&3)"
+    exec 3<&-
+    case "$raw" in
+        HTTP/1.[01]\ 2*) ;;
+        *) return 1 ;;
+    esac
+    printf '%s' "${raw#*$'\r\n\r\n'}"
+}
+
+# The short names the SERVICE offers, from the payload already fetched above.
+# MetaController.PackageOption serialises the short name as "name" (see the ⚠ note
+# on field names above — "shortName" was the first, wrong, guess).
+packages=""
+npkg=0
+while IFS= read -r short; do
+    [ -n "$short" ] || continue
+    packages="$packages $short"
+    npkg=$((npkg + 1))
+done <<< "$(printf '%s' "$opts" | grep -o '"name":"[^"]*"' | cut -d'"' -f4)"
+
+# ⚠ NON-VACUITY. An empty list would make the loop below run zero times and pass in
+# silence — the "check that quietly stops checking" this probe was written to end.
+# The "packages":[{ assertion above already proves the array is non-empty; this
+# proves the extraction agrees with it.
+[ "$npkg" -ge 1 ] \
+    || fail "the service offers packages but no short names could be read from /api/meta/run-options — the payload shape changed and this probe would have checked nothing: ${opts}"
+
+sid="$(http_post /api/sessions application/json '{"name":"smoke"}')" \
+    || fail "could not create a session (POST /api/sessions)"
+sid="$(printf '%s' "$sid" | grep -o '"sessionId":"[^"]*"' | cut -d'"' -f4)"
+[ -n "$sid" ] || fail "POST /api/sessions returned no sessionId"
+
+# A one-row DM, uploaded as multipart. Built by hand so the curl and /dev/tcp
+# branches of http_post send identical bytes.
+bd="corejsmoke$$boundary"
+csv=$'STUDYID,DOMAIN,USUBJID\r\nS1,DM,U1\r\n'
+part="--$bd"$'\r\n'"Content-Disposition: form-data; name=\"file\"; filename=\"dm.csv\""$'\r\n'"Content-Type: text/csv"$'\r\n\r\n'"$csv"$'\r\n'"--$bd--"$'\r\n'
+http_post "/api/sessions/$sid/files?filename=dm.csv" "multipart/form-data; boundary=$bd" "$part" >/dev/null \
+    || fail "could not stage dm.csv into session $sid (POST /api/sessions/{id}/files)"
+
+# The escaped-newline cut keeps the operator-facing sentence and drops the Jackson
+# source/location tail; the reference chain still yields the rule id.
+run_message() {
+    local s="$1" m
+    case "$s" in *'"message":"'*) ;; *) printf 'no message in the run status'; return ;; esac
+    m="${s#*\"message\":\"}"
+    m="${m%%\\n*}"
+    m="${m%%\",\"*}"
+    printf '%s' "$m"
+}
+run_rule_id() {
+    case "$1" in
+        *'LinkedHashMap[\"'*)
+            local r="${1#*LinkedHashMap[\\\"}"
+            printf 'rule %s: ' "${r%%\\\"*}" ;;
+    esac
+}
+
+bad=""
+nbad=0
+other=""
+nother=0
+refused=""
+nrefused=0
+recorded=""
+nrecorded=0
+nrows=0
+succeeded=0
+for p in $packages; do
+    rid="$(http_post "/api/sessions/$sid/checks" application/json \
+            "{\"rulesPackages\":[\"$p\"]}")" \
+        || fail "could not start a check run for rule package '$p'"
+    rid="$(printf '%s' "$rid" | grep -o '"checkRunId":"[^"]*"' | cut -d'"' -f4)"
+    [ -n "$rid" ] || fail "starting a check run for '$p' returned no checkRunId"
+
+    st=""
+    for _ in $(seq 1 120); do
+        st="$(http_get "/api/checks/$rid/status")" || st=""
+        case "$st" in
+            *'"status":"SUCCEEDED"'*|*'"status":"FAILED"'*|*'"status":"CANCELLED"'*) break ;;
+        esac
+        sleep 1
+    done
+    case "$st" in
+        *'"status":"SUCCEEDED"'*)
+            case "$st" in
+                *'"processedDatasets":0'*)
+                    fail "rule package '$p' succeeded without processing the staged dataset: $st" ;;
+            esac
+            succeeded=$((succeeded + 1))
+            # ⛔ THE RECORDED LOAD ERROR. See the ⛔ note above: a rule the engine could
+            # not load is reported, never thrown, so only the report shows it.
+            report="$(http_get "/api/checks/$rid/report")" \
+                || fail "rule package '$p' succeeded but GET /api/checks/$rid/report failed"
+            # ⚠ NON-VACUITY, per report: the rows this arm reads must be there in the
+            # shape it reads them, or a renamed key would turn it into a no-op.
+            case "$report" in
+                *'"Rules_Report"'*) ;;
+                *) fail "the report for rule package '$p' has no Rules_Report — its shape changed, and the recorded-load-error check would have read nothing" ;;
+            esac
+            n="$(printf '%s' "$report" \
+                    | grep -oE '"status"[[:space:]]*:[[:space:]]*"[A-Z_]+"' | wc -l)" || true
+            nrows=$((nrows + n))
+            n="$(printf '%s' "$report" \
+                    | grep -oE '"status"[[:space:]]*:[[:space:]]*"EXECUTION_ERROR"' | wc -l)" || true
+            if [ "$n" -gt 0 ]; then
+                # The row's message precedes its status; a load error's message opens
+                # with the rule id in brackets, so the first one names rule and cause.
+                why="$(printf '%s' "$report" \
+                        | grep -oE '"message"[[:space:]]*:[[:space:]]*"([^"\\]|\\.)*"[[:space:]]*,[[:space:]]*"status"[[:space:]]*:[[:space:]]*"EXECUTION_ERROR"' \
+                        | head -1 \
+                        | sed -E 's/^"message"[[:space:]]*:[[:space:]]*"//; s/"[[:space:]]*,[[:space:]]*"status".*$//')" || true
+                recorded="$recorded
+smoke:   rules-$p.json: $n EXECUTION_ERROR row(s), first: ${why:-no message on the row}"
+                nrecorded=$((nrecorded + 1))
+            fi ;;
+        *'"status":"FAILED"'*)
+            # The Jackson binding signature: the corpus, not the request, is at fault.
+            case "$st" in
+                *'net.cumba.corej.core.model.RulePackage'*|*RuleDefinitionException*)
+                    bad="$bad
+smoke:   rules-$p.json: $(run_rule_id "$st")$(run_message "$st")"
+                    nbad=$((nbad + 1)) ;;
+                # A run-level SELECTION refusal, not a corpus fault: the package loaded,
+                # and the engine then declined to guess which standard to resolve
+                # metadata against. StudyValidationService raises exactly this for a
+                # multi-leg TIG package and for a package declaring no standard at all.
+                #
+                # ⛔ KEY ON THE TWO INTENDED MESSAGES, NOT on the remedy sentence they
+                # share (review round 3, H-1). `-mp / --metadata-products` appears at a
+                # THIRD raise site — effectiveMetadataProducts, review finding R-8:
+                # "The selected rule package(s) declare a CDISC Library standard that
+                # cannot be resolved." That is a CORPUS fault, deliberately fail-loud
+                # under Q1, and three packages of the corpus pinned at the time hit it
+                # (the sendig-dart-1-2 packages declared sendig/dart-1-2, which CDISC
+                # never published). Matching the remedy sentence counted
+                # those three corpus defects as legitimate refusals and exited 0 with
+                # `succeeded >= 1` satisfied by a single package — the very swallow this
+                # split was written to end, one message further in.
+                *'declare more than one TIG leg'*|*'declare no CDISC Library standard'*)
+                    refused="$refused
+smoke:   rules-$p.json: $(run_message "$st")"
+                    nrefused=$((nrefused + 1)) ;;
+                *)
+                    other="$other
+smoke:   rules-$p.json: $(run_message "$st")"
+                    nother=$((nother + 1)) ;;
+            esac ;;
+        *'"status":"CANCELLED"'*)
+            fail "the check run for rule package '$p' was CANCELLED — nothing cancels it here, so the service aborted the run itself: $st" ;;
+        *)
+            fail "the check run for rule package '$p' never reached a terminal status within 120s: ${st:-no status}" ;;
+    esac
+done
+
+if [ "$nbad" -gt 0 ]; then
+    echo "smoke: the rule corpus staged in this bundle is UNLOADABLE by the engine in lib/." >&2
+    echo "smoke: $nbad of $npkg packages offered by /api/meta/run-options failed to load:" >&2
+    echo "${bad#$'\n'}" >&2
+    echo "smoke:" >&2
+    echo "smoke: This is a corpus/engine version mismatch, not a packaging fault: the corpus" >&2
+    echo "smoke: pinned by dependency.corej-rules.tag in pom.xml predates the engine this" >&2
+    echo "smoke: bundle links. Release cumba-oss-corej-rules FIRST, then bump the pin (its" >&2
+    echo "smoke: tag, both sha256 properties and corej.rules.draft-packages) here and in" >&2
+    echo "smoke: every other bundle that pins the corpus." >&2
+    echo "smoke: ⛔ Do NOT weaken this probe to get a green build." >&2
+    exit 1
+fi
+
+# ⛔ A run that failed for a reason this probe cannot name. The corpus parsed — so
+# this is not the version-mismatch story above — and the run then broke somewhere
+# the probe does not model. Fatal on purpose: `succeeded >= 1` below is satisfied by
+# ONE package, so without this every other package could be failing and the script
+# would still print OK.
+if [ "$nother" -gt 0 ]; then
+    echo "smoke: $nother of $npkg rule packages LOADED but their check run FAILED for a" >&2
+    echo "smoke: reason this probe does not recognise — neither a corpus binding failure" >&2
+    echo "smoke: nor a metadata-product selection refusal:" >&2
+    echo "${other#$'\n'}" >&2
+    echo "smoke:" >&2
+    echo "smoke: The rules parsed, so this is NOT the corpus/engine version mismatch above." >&2
+    echo "smoke: Look at the bundle's own runtime: the staged dataset, the metadata store," >&2
+    echo "smoke: the report writer, the session's working directory." >&2
+    echo "smoke: ⛔ Do NOT widen the refusal signature to make this go away." >&2
+    exit 1
+fi
+
+# ⛔ RECORDED load errors: every package loaded and its run succeeded, and the engine
+# still reported rules it could not use. Fatal for the same reason as the thrown kind
+# above — a dead rule is a check the operator believes ran.
+if [ "$nrecorded" -gt 0 ]; then
+    echo "smoke: the rule corpus staged in this bundle LOADS, but the engine in lib/ RECORDED" >&2
+    echo "smoke: rules it could not use: $nrecorded of $npkg packages report EXECUTION_ERROR rows" >&2
+    echo "smoke: (a rule load error is filed on the rule and reported, never thrown):" >&2
+    echo "${recorded#$'\n'}" >&2
+    echo "smoke:" >&2
+    echo "smoke: On this one-row dataset the published corpus has none. A load error means the" >&2
+    echo "smoke: corpus and the engine disagree on the rule language, so the remedy is the same" >&2
+    echo "smoke: as for an unloadable package above; a run-time error is an engine defect." >&2
+    echo "smoke: ⛔ Do NOT weaken this probe to get a green build." >&2
+    exit 1
+fi
+
+# ⚠ NON-VACUITY across the corpus: the recorded-load-error check read at least one
+# rule row, so an empty Rules_Report everywhere cannot pass for a clean corpus.
+[ "$nrows" -ge 1 ] \
+    || fail "all $npkg packages ran, but their reports carry no rule rows at all — the recorded-load-error check read nothing"
+
+# ⛔ EXECUTION, not merely loading. Every package parsed; at least one must have run
+# to completion over the staged dataset, or the service never reached a rule.
+[ "$succeeded" -ge 1 ] \
+    || fail "all $npkg rule packages loaded, but NONE completed a run over the staged dataset — the service never reached rule execution"
+
 # ⚠ `|| true`: under `set -euo pipefail` a grep that matches nothing exits 1, pipefail
 # propagates it, and the assignment fails — the script would then exit 1 printing
 # NOTHING, after every real assertion had passed. This count is a cosmetic banner
@@ -294,4 +597,10 @@ pkgcount="$(printf '%s' "$opts" | grep -o '"ruleCount":' | wc -l)" || true
 
 echo "smoke: OK — $BUNDLE started on the externally-configured port $port"
 echo "smoke: /api/info -> $body"
-echo "smoke:      and /api/meta/run-options offers $pkgcount rule packages"
+echo "smoke:      and /api/meta/run-options offers $pkgcount rule packages,"
+echo "smoke:      ALL $npkg of which the engine loaded; $succeeded ran to completion"
+# The header promises the third outcome is "recorded AND reported". Reported here.
+if [ "$nrefused" -gt 0 ]; then
+    echo "smoke:      $nrefused declined to pick a metadata product (a legitimate refusal):"
+    echo "${refused#$'\n'}"
+fi
