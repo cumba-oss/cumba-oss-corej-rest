@@ -6,8 +6,8 @@ here.
 
 It holds `packages.json` and a set of `rules-*.json` package files, directly — no subdirectory.
 The version that shipped is pinned in this repository's `pom.xml` as `dependency.corej-rules.tag`,
-and it is the **same corpus `cumba-oss-corej-cli` and the cumba data browser ship**, so all three
-answer identically for the same study.
+and it is the **same corpus the CLI and the cumba data browser ship**, so all three answer
+identically for the same study.
 
 ⚠ Until 2026-09-11 this directory shipped **empty**, and until it was populated the service started
 normally and `/api/meta/run-options` simply offered no rule packages — a service that looks healthy
@@ -16,16 +16,16 @@ version that is out of date, not this one.
 
 ## What is in it, and what is not
 
-The corpus comes from [cumba-oss-corej-rules](https://github.com/cumba-oss/cumba-oss-corej-rules),
-the public corpus. Two things to know about its scope:
+The corpus comes from [`cumba-oss-corej-rules`](https://github.com/cumba-oss/cumba-oss-corej-rules),
+which is the public corpus. Three things to know about its scope:
 
 - **No CORE rule family.** Those rules are externally sourced and may not be redistributed as a
-  set, so no cumba bundle ships them. Everything else is here. ⚠ A consequence worth stating:
-  **the bundled corpus therefore has no TIG coverage** — the only TIG package outside the CORE
-  family is `rules-draft-tig-1-0`, which is in the DRAFT family below.
-- **No DRAFT family.** Release `v0.5.0` ships 32 packages, none of them `rules-draft-*`. The
-  DRAFT rules are **parked candidate rules**: fully generated, schema-validated and executed by
-  their test scenarios upstream, but not promoted, and the published archive leaves them out.
+  set, so no cumba corpus carries them and no cumba bundle ships them. Everything else is here.
+- **No DRAFT family.** The published archive carries no `rules-draft-*` package. The DRAFT rules
+  are parked candidate rules: fully generated, schema-validated and executed by their test
+  scenarios upstream, but not promoted.
+- **No TIG coverage.** `rules-draft-tig-1-0` is the only TIG package in the corpus, so TIG
+  conformance travelled with the DRAFT family and is not offered. Accepted, not a defect.
 
 ## Replacing it with a different corpus version
 
@@ -37,8 +37,8 @@ Two ways. Neither requires rebuilding the bundle.
 COREJ_RULES_DIR=/srv/corej/rules-0.5.0 ./run.sh
 ```
 
-`COREJ_RULES_DIR` outranks the `corej.rules.dir` system property set by
-`cumba-oss-corej-rest.conf`, which outranks this directory.
+`COREJ_RULES_DIR` outranks the `-Dcorej.rules.dir` system property, which outranks this directory —
+the precedence the launcher's sidecar `.conf` configures.
 
 **Or replace the contents in place**, from a `cumba-oss-corej-rules` release:
 
@@ -55,10 +55,11 @@ contents, as above.
 ⚠ Delete the old `rules-*.json` first. The engine reads whatever packages are present, so leftovers
 from the previous corpus stay selectable and silently mix two versions.
 
-⚠ **Restart the service** after replacing the corpus.
+⚠ In the container image the entrypoint **seeds** the bundled corpus onto the configured rules
+directory only if that directory holds no `packages.json` of its own, so a corpus you unpack there
+is never overwritten.
 
-⚠ In the container image the entrypoint **seeds** this corpus onto the data volume only if the
-target has no `packages.json` of its own, so a corpus you unpack there is never overwritten.
+⚠ **Restart the service** after replacing the corpus.
 
 ## Verifying what is loaded
 

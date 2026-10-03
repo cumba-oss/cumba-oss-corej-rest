@@ -930,10 +930,9 @@ class StudyValidationCheckRunnerTest
      *
      * <p>
      * ⚠ <b>Inverted control — actually run, not asserted (2026-08-12, wave-38 lane C).</b> The
-     * three dependencies were temporarily deleted from
-     * {@code clients/cumba-oss-corej-rest/pom.xml}, this class was re-run, and the pom was
-     * restored. Measured: <b>3 of the 4 wave-38 tests went red</b> (27 run, 2 failures, 1 error),
-     * this one reporting
+     * three dependencies were temporarily deleted from this module's {@code pom.xml}, this class
+     * was re-run, and the pom was restored. Measured: <b>3 of the 4 wave-38 tests went red</b> (27
+     * run, 2 failures, 1 error), this one reporting
      * </p>
      *
      * <pre>

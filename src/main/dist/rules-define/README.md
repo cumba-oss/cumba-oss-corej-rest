@@ -46,4 +46,4 @@ that does not exist is a hard error — `DefineRuleSelectionException: Configure
 directory not found`. An empty directory is fine; a missing one is not. (`rules/` beside it is more
 forgiving: there, missing and empty behave identically.)
 
-`COREJ_DEFINE_RULES_DIR` overrides the bundle default configured in `cumba-oss-corej-rest.conf`.
+(`COREJ_DEFINE_RULES_DIR` overrides the bundle default configured in the launcher's sidecar `.conf`.)
