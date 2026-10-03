@@ -374,7 +374,8 @@ discovered per run:
   home is `/app` — but the file itself is never created: only its parent directory, because an
   empty file is a regular file the engine accepts as configured and then fails to open. Seed it
   once with `COREJ_CACHESEED_ENABLED=true`, or provision it out of band.
-  ⚠ **Store format 4 (2026-09-28):** a store of an older format (3, or 2 from an earlier release) is
+  ⚠ **Store format 5 (2026-10-03; errata register and text normalisation):** a store of an older
+  format (4, 3, or 2 from an earlier release) is
   refused — every run on it fails and `/api/meta/run-options` answers **503** naming the remedy —
   until it is re-provisioned, or re-seeded at start-up with `COREJ_CACHESEED_ENABLED=true` (no
   `refresh` needed). A store written by a NEWER build is left alone (a downgrade); only
