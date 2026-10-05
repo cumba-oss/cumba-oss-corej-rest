@@ -85,6 +85,21 @@ class OpenApiDocTest
     }
 
 
+    /**
+     * PLAN-finding-values-record-level-only (P2 review LOW-3): the v2 report keys a Group finding
+     * by its group variables with {@code keySource} {@code GROUP}
+     * ({@code ValidationFindingLocation.GROUP_KEY_SOURCE}), so the published description names it
+     * beside the four record-key tiers.
+     */
+    @Test
+    void findingRowKeySourceDescriptionNamesGroup() throws Exception
+    {
+        mvc.perform(get("/v3/api-docs")).andExpect(status().isOk()).andExpect(
+                jsonPath("$.components.schemas.FindingRow.properties.keySource.description")
+                        .value(org.hamcrest.Matchers.containsString("SPONSOR_ID or GROUP")));
+    }
+
+
     @Test
     void swaggerUiRedirects() throws Exception
     {

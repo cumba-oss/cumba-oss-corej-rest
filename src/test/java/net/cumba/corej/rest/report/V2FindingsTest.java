@@ -107,6 +107,23 @@ class V2FindingsTest
 
 
     @Test
+    void aGroupKeyedFindingCarriesKeySourceGroup()
+    {
+        String location = """
+                {"dataset":"AE","variables":["AETERM"],\
+                "keyVariables":["USUBJID"],"keySource":"GROUP"}""";
+        String rows = """
+                [{"row":3,"USUBJID":"S1","SEQ":"","keys":{"USUBJID":"S1"},"values":["X"]}]""";
+
+        V2Findings.Finding f = V2Findings.parse(doc(location, rows)).get(0);
+
+        assertThat(f.location().keySource()).isEqualTo("GROUP");
+        assertThat(f.location().keyVariables()).containsExactly("USUBJID");
+        assertThat(f.rows().get(0).keys()).containsExactlyEntriesOf(Map.of("USUBJID", "S1"));
+    }
+
+
+    @Test
     void anUnkeyedFindingHasNullKeyFieldsThroughout()
     {
         V2Findings.Finding f = V2Findings.parse(doc(PLAIN_LOCATION, "[" + PLAIN_ROW + "]")).get(0);

@@ -34,7 +34,7 @@ public record FindingRow(@Schema(description = "CORE rule id") @Nullable String 
         @Schema(description = "Raw dataset columns the finding lists by name without a value: a column a non-record finding (dataset verdict, per-variable finding) is about, whose cell would be an arbitrary row's. Disjoint from variables; omitted when empty") @JsonInclude(JsonInclude.Include.NON_EMPTY) List<String> columns,
         @Schema(description = "Ordered record-key column names identifying this row, when resolved") @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable List<String> keyVariables,
         @Schema(description = "Record-key values for this row, keyed by column name") @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable Map<String, @Nullable String> keys,
-        @Schema(description = "Which tier produced the record key: DEFINE_KEY, STRUCTURAL, NATURAL or SPONSOR_ID") @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable String keySource)
+        @Schema(description = "Which tier produced the record key: DEFINE_KEY, STRUCTURAL, NATURAL, SPONSOR_ID or GROUP (a Group finding, keyed by its group variables; a group finding with no grouping column present carries no key)") @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable String keySource)
 {
 
     public FindingRow
