@@ -33,9 +33,18 @@ import tools.jackson.databind.JsonNode;
 public final class V2Findings
 {
 
-    /** Every field a v2 finding object carries; all are written unconditionally. */
+    /** The v2 finding fields the writer writes unconditionally. */
+    private static final Set<String> FINDING_REQUIRED = Set.of("core_id", "message",
+            "executability", "dataset", "domain", "location", "variables", "rows");
+
+    /**
+     * Every field a v2 finding object may carry: the required ones plus {@code columns} — the raw
+     * columns the finding lists <em>by name without a value</em>, written only when non-empty
+     * ({@code PLAN-finding-values-record-level-only}, owner Q-B 2026-10-05; the EC-40 {@code keys}
+     * precedent for an additive, conditionally-present field).
+     */
     private static final Set<String> FINDING_FIELDS = Set.of("core_id", "message", "executability",
-            "dataset", "domain", "location", "variables", "rows");
+            "dataset", "domain", "location", "variables", "columns", "rows");
 
     /** Required location fields; {@code keyVariables}/{@code keySource} are the optional pair. */
     private static final Set<String> LOCATION_REQUIRED = Set.of("dataset", "variables");
@@ -89,7 +98,7 @@ public final class V2Findings
     private static Finding finding(JsonNode aNode, String aPath)
     {
         requireObject(aNode, aPath);
-        requireFields(aNode, FINDING_FIELDS, aPath);
+        requireFields(aNode, FINDING_REQUIRED, aPath);
         rejectUnknown(aNode, FINDING_FIELDS, aPath);
 
         Location location = location(aNode.get("location"), aPath + ".location");
@@ -104,10 +113,22 @@ public final class V2Findings
         {
             rows.add(row(rowsNode.get(i), aPath + ".rows[" + i + "]", keyed));
         }
+        // The writer omits `columns` when the finding lists nothing; an explicitly empty list
+        // would be a shape the writer never produces, and strictness is the point.
+        List<String> columns = List.of();
+        if (aNode.has("columns"))
+        {
+            columns = strings(aNode.get("columns"), aPath + ".columns");
+            if (columns.isEmpty())
+            {
+                throw new V2ReportFormatException("v2 report: " + aPath
+                        + ".columns is empty; the writer omits the field when there is none");
+            }
+        }
         return new Finding(text(aNode, "core_id", aPath), text(aNode, "message", aPath),
                 text(aNode, "executability", aPath), text(aNode, "dataset", aPath),
                 text(aNode, "domain", aPath), location,
-                strings(aNode.get("variables"), aPath + ".variables"), rows);
+                strings(aNode.get("variables"), aPath + ".variables"), columns, rows);
     }
 
 
@@ -271,16 +292,18 @@ public final class V2Findings
 
     /**
      * One v2 finding: the rule + dataset it belongs to, its location (which carries the EC-40
-     * record-key schema) and its rows.
+     * record-key schema), its valued {@code variables}, the {@code columns} it lists by name
+     * without a value (empty when the document carries none) and its rows.
      */
     public record Finding(@Nullable String coreId, @Nullable String message,
             @Nullable String executability, @Nullable String dataset, @Nullable String domain,
-            Location location, List<String> variables, List<Row> rows)
+            Location location, List<String> variables, List<String> columns, List<Row> rows)
     {
 
         public Finding
         {
             variables = List.copyOf(variables);
+            columns = List.copyOf(columns);
             rows = List.copyOf(rows);
         }
     }

@@ -195,6 +195,46 @@ class V2FindingsTest
     }
 
 
+    /**
+     * PLAN-finding-values-record-level-only (owner Q-B, 2026-10-05): {@code columns} is the one
+     * optional finding field — the raw columns the finding lists by name without a value, written
+     * only when non-empty. Strictness holds around it: an empty list is a shape the writer never
+     * produces, and every other unknown field still throws.
+     */
+    @Test
+    void theOptionalColumnsFieldIsParsedWhenPresentAndEmptyWhenAbsent()
+    {
+        List<V2Findings.Finding> withColumns = V2Findings.parse(json("""
+                {"Report_Version":"2.0","Findings":[{"core_id":"C1","message":"m",\
+                "executability":"e","dataset":"dm.xpt","domain":"DM",\
+                "location":{"dataset":"DM","variables":["RANDFL"]},\
+                "variables":["$count"],"columns":["RANDFL","ARMCD"],\
+                "rows":[{"row":1,"USUBJID":"","SEQ":"","values":["3"]}]}]}"""));
+        assertThat(withColumns.get(0).columns()).containsExactly("RANDFL", "ARMCD");
+        assertThat(withColumns.get(0).variables()).containsExactly("$count");
+        assertThat(V2Findings.parse(doc(PLAIN_LOCATION, "[" + PLAIN_ROW + "]")).get(0).columns())
+                .isEmpty();
+    }
+
+
+    @Test
+    void anEmptyOrWronglyTypedColumnsFieldThrows()
+    {
+        assertThatThrownBy(() -> V2Findings.parse(json("""
+                {"Report_Version":"2.0","Findings":[{"core_id":"C1","message":"m",\
+                "executability":"e","dataset":"dm.xpt","domain":"DM",\
+                "location":{"dataset":"DM","variables":[]},"variables":[],"columns":[],\
+                "rows":[]}]}"""))).isInstanceOf(V2ReportFormatException.class)
+                .hasMessageContaining("Findings[0].columns is empty");
+        assertThatThrownBy(() -> V2Findings.parse(json("""
+                {"Report_Version":"2.0","Findings":[{"core_id":"C1","message":"m",\
+                "executability":"e","dataset":"dm.xpt","domain":"DM",\
+                "location":{"dataset":"DM","variables":[]},"variables":[],"columns":"RANDFL",\
+                "rows":[]}]}"""))).isInstanceOf(V2ReportFormatException.class)
+                .hasMessageContaining("Findings[0].columns is not an array");
+    }
+
+
     @Test
     void anUnrecognisedFindingFieldThrows()
     {

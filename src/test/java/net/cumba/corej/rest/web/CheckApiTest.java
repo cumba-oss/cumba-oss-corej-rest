@@ -758,7 +758,9 @@ class CheckApiTest
     void reportAsXlsxWhenAcceptingSpreadsheet() throws Exception
     {
         String xlsx = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-        String runId = seedSucceeded(sampleReport(2)).id();
+        // The workbook is rendered from the v2 document (owner Q-B, 2026-10-05), so the run
+        // carries both renderings, as every real run does.
+        String runId = seedFindings(2);
         byte[] body = mvc.perform(get("/api/checks/{id}/report", runId).accept(xlsx))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.parseMediaType(xlsx)))

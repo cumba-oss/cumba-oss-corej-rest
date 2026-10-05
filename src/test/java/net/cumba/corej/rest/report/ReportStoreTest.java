@@ -85,7 +85,10 @@ class ReportStoreTest
                     .append(i).append("\",\"values\":[\"v").append(i).append("\"]}]}");
         }
         findings.append(']');
-        return "{\"Report_Version\":\"2.0\",\"Findings\":" + findings + "}";
+        // Production's v2 document carries every shared section; the XLSX renders from it, so the
+        // fixture carries the conformance value the workbook tests read back.
+        return "{\"Report_Version\":\"2.0\",\"Conformance_Details\":{\"Standard\":\"SDTMIG\"},"
+                + "\"Findings\":" + findings + "}";
     }
 
 
@@ -256,19 +259,23 @@ class ReportStoreTest
 
 
     /**
-     * P13, XLSX arm: {@code /report.xlsx} is rendered from the stored v1, so the two notes reach
-     * the template rows 24 and 25 that PLAN-report-conformance-fields appended.
+     * P13, XLSX arm: {@code /report.xlsx} is rendered from the stored v2 document (owner Q-B,
+     * 2026-10-05 — it used to read the v1), whose shared {@code Conformance_Details} carries the
+     * two notes, so they reach the template rows 24 and 25 that PLAN-report-conformance-fields
+     * appended.
      */
     @Test
     void xlsxRenderedFromStoredJsonFillsTheAppendedConformanceRows(@TempDir Path dir)
         throws IOException
     {
         ReportStore store = newStore(dir, 64, Duration.ofMinutes(30));
-        store.persist("run-x", "{\"Conformance_Details\":{\"Standard\":\"SDTMIG\","
+        String conformance = "\"Conformance_Details\":{\"Standard\":\"SDTMIG\","
                 + "\"CT_Declaration_Mismatch\":\"define declares sdtmct-2023-12-15; run used none\","
                 + "\"Define_Metadata_Basis\":\"degraded — define.xml could not be parsed\"},"
-                + "\"Dataset_Details\":[],\"Issue_Summary\":[],\"Issue_Details\":[],"
-                + "\"Rules_Report\":[]}");
+                + "\"Dataset_Details\":[],\"Issue_Summary\":[],";
+        store.persist("run-x", "{" + conformance + "\"Issue_Details\":[],\"Rules_Report\":[]}");
+        store.persistV2("run-x", "{\"Report_Version\":\"2.0\"," + conformance
+                + "\"Findings\":[],\"Rules_Report\":[]}");
 
         byte[] workbook = store.xlsxReport("run-x");
         try (org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook(
@@ -386,6 +393,7 @@ class ReportStoreTest
     {
         ReportStore store = newStore(dir, 64, Duration.ofMinutes(30));
         store.persist("run-1", sampleReport(3));
+        store.persistV2("run-1", sampleReportV2(3));
 
         byte[] workbook = store.xlsxReport("run-1");
         assertThat(workbook).isNotEmpty();
@@ -409,10 +417,24 @@ class ReportStoreTest
 
 
     @Test
+    void xlsxWithoutAV2DocumentIsANamedErrorNotAnEmptySheet(@TempDir Path dir) throws IOException
+    {
+        // PLAN-finding-values-record-level-only (owner Q-B): the workbook is v2's rendering. A run
+        // that persisted only the v1 document (a pre-v2 build's) names the gap instead of rendering
+        // the frozen v1's "null" token or an empty Issue Details sheet.
+        ReportStore store = newStore(dir, 64, Duration.ofMinutes(30));
+        store.persist("run-v1only", sampleReport(2));
+        assertThatThrownBy(() -> store.xlsxReport("run-v1only"))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("v2");
+    }
+
+
+    @Test
     void persistXlsxStoresAndServesFromDisk(@TempDir Path dir) throws IOException
     {
         ReportStore store = newStore(dir, 64, Duration.ofMinutes(30));
         store.persist("run-px", sampleReport(2));
+        store.persistV2("run-px", sampleReportV2(2));
         assertThat(store.hasXlsx("run-px")).isFalse();
         assertThat(store.xlsxSize("run-px")).isNull();
 
@@ -435,6 +457,7 @@ class ReportStoreTest
     {
         ReportStore store = newStore(dir, 64, Duration.ofMinutes(30));
         store.persist("run-d2", sampleReport(1));
+        store.persistV2("run-d2", sampleReportV2(1));
         store.persistXlsx("run-d2");
         store.persistRuleDefs("run-d2", "{\"CG0001\":{\"source\":{},\"expanded\":null}}");
         assertThat(store.hasXlsx("run-d2")).isTrue();

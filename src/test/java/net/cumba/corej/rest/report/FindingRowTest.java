@@ -28,7 +28,7 @@ class FindingRowTest
             String aKeySource)
     {
         return new FindingRow("CORE-1", "dm.xpt", "S1", 3, "2", "executable", "m", List.of("AGE"),
-                List.of("12"), "DM", aKeyVariables, aKeys, aKeySource);
+                List.of("12"), "DM", List.of(), aKeyVariables, aKeys, aKeySource);
     }
 
 
@@ -40,6 +40,26 @@ class FindingRowTest
                         + "\"row\":3,\"seq\":\"2\",\"executability\":\"executable\","
                         + "\"message\":\"m\",\"variables\":[\"AGE\"],\"values\":[\"12\"],"
                         + "\"domain\":\"DM\"}");
+    }
+
+
+    /**
+     * PLAN-finding-values-record-level-only (owner Q-B, 2026-10-05): the raw columns a finding
+     * lists by name without a value ride as their own field, omitted when empty — so a record
+     * finding's payload is byte-identical to a pre-P2 one (the EC-40 precedent above).
+     */
+    @Test
+    void theNameOnlyColumnsRideAsTheirOwnFieldAndAreOmittedWhenEmpty()
+    {
+        FindingRow named = new FindingRow("CORE-1", "dm.xpt", "", 1, "", "executable", "m",
+                List.of("$count"), List.of("3"), "DM", List.of("RANDFL", "ARMCD"), null, null,
+                null);
+        assertThat(MAPPER.writeValueAsString(named))
+                .endsWith("\"variables\":[\"$count\"],\"values\":[\"3\"],\"domain\":\"DM\","
+                        + "\"columns\":[\"RANDFL\",\"ARMCD\"]}");
+        assertThat(MAPPER.writeValueAsString(row(null, null, null))).doesNotContain("columns");
+        assertThatThrownBy(() -> named.columns().add("X"))
+                .isInstanceOf(UnsupportedOperationException.class);
     }
 
 
@@ -92,9 +112,10 @@ class FindingRowTest
     void nullVariablesAndValuesStillBecomeEmptyLists()
     {
         FindingRow r = new FindingRow(null, null, null, null, null, null, null, null, null, null,
-                null, null, null);
+                null, null, null, null);
         assertThat(r.variables()).isEmpty();
         assertThat(r.values()).isEmpty();
+        assertThat(r.columns()).isEmpty();
         assertThat(r.keyVariables()).isNull();
         assertThat(r.keys()).isNull();
     }

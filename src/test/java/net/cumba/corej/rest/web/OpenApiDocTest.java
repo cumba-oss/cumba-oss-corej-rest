@@ -64,6 +64,27 @@ class OpenApiDocTest
     }
 
 
+    /**
+     * PLAN-finding-values-record-level-only (owner Q-B, 2026-10-05): the findings row carries the
+     * name-only columns as their own field. The SPA's {@code schema.d.ts} is generated from the
+     * committed {@code openapi.snapshot.json} (in {@code cumba-corej-web}), so this pins the served
+     * contract that snapshot mirrors by hand.
+     */
+    @Test
+    void findingRowPublishesTheNameOnlyColumnsField() throws Exception
+    {
+        mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.components.schemas.FindingRow.properties.columns.type")
+                        .value("array"))
+                .andExpect(jsonPath("$.components.schemas.FindingRow.properties.columns.items.type")
+                        .value("string"))
+                .andExpect(
+                        jsonPath("$.components.schemas.FindingRow.properties.columns.description")
+                                .value(org.hamcrest.Matchers
+                                        .containsString("by name without a value")));
+    }
+
+
     @Test
     void swaggerUiRedirects() throws Exception
     {

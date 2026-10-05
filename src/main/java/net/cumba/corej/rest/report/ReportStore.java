@@ -180,7 +180,7 @@ public class ReportStore
 
     /**
      * Renders the run's report as an XLSX workbook, structurally and content-identical to the CLI's
-     * {@code --output-format xlsx} output. Built from the same persisted JSON document the
+     * {@code --output-format xlsx} output. Built from the persisted v2 JSON document the
      * {@code /report} endpoint serves, so the JSON and Excel views never diverge. The per-sheet row
      * cap follows the {@code MAX_REPORT_ROWS} environment variable (default 10000).
      *
@@ -235,10 +235,31 @@ public class ReportStore
     }
 
 
+    /**
+     * Renders the run's workbook from its persisted <b>v2</b> document. The XLSX carries v2's exact
+     * states (PLAN-finding-values-record-level-only, owner Q-B 2026-10-05): its Issue Details sheet
+     * is fed from the {@code Findings} array, whose finding-level {@code columns} list a name-only
+     * column as a state of its own — the v1 document has no such state and the writer refuses it. A
+     * run persisted without a v2 document (a pre-v2 build's) is a named error, not an empty sheet.
+     */
     @SuppressWarnings("unchecked")
     private byte[] renderXlsx(String runId)
     {
-        Map<String, Object> document = mapper.convertValue(tree(runId), Map.class);
+        if (!hasReportV2(runId))
+        {
+            throw new IllegalStateException("No v2 report persisted for run " + runId
+                    + " — the XLSX report is rendered from the v2 Findings document");
+        }
+        Map<String, Object> document;
+        try
+        {
+            document = mapper.convertValue(mapper.readTree(Files.readAllBytes(fileForV2(runId))),
+                    Map.class);
+        }
+        catch (IOException e)
+        {
+            throw new UncheckedIOException("Failed to read v2 report for run " + runId, e);
+        }
         ReportSections sections = ReportSections.fromExportDocument(document);
         // Routed through the report SPI rather than constructing a writer: this module declares
         // cumba-oss-corej-report-xlsx as a runtime dependency but imports nothing from it, so an
@@ -720,7 +741,7 @@ public class ReportStore
     private static FindingRow toFindingRow(V2Findings.Finding f, V2Findings.Row r)
     {
         return new FindingRow(f.coreId(), f.dataset(), r.usubjid(), r.row(), r.seq(),
-                f.executability(), f.message(), f.variables(), r.values(), f.domain(),
+                f.executability(), f.message(), f.variables(), r.values(), f.domain(), f.columns(),
                 f.location().keyVariables(), r.keys(), f.location().keySource());
     }
 

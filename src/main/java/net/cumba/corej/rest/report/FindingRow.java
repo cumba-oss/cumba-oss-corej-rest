@@ -31,6 +31,7 @@ public record FindingRow(@Schema(description = "CORE rule id") @Nullable String 
         @Schema(description = "Names of the variables reported for this row") List<String> variables,
         @Schema(description = "Values of those variables for this row (positional)") List<String> values,
         @Schema(description = "Domain / dataset name (disambiguates findings sharing a file)") @Nullable String domain,
+        @Schema(description = "Raw dataset columns the finding lists by name without a value: a column a non-record finding (dataset verdict, per-variable finding) is about, whose cell would be an arbitrary row's. Disjoint from variables; omitted when empty") @JsonInclude(JsonInclude.Include.NON_EMPTY) List<String> columns,
         @Schema(description = "Ordered record-key column names identifying this row, when resolved") @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable List<String> keyVariables,
         @Schema(description = "Record-key values for this row, keyed by column name") @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable Map<String, @Nullable String> keys,
         @Schema(description = "Which tier produced the record key: DEFINE_KEY, STRUCTURAL, NATURAL or SPONSOR_ID") @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable String keySource)
@@ -40,6 +41,7 @@ public record FindingRow(@Schema(description = "CORE rule id") @Nullable String 
     {
         variables = variables == null ? List.of() : List.copyOf(variables);
         values = values == null ? List.of() : List.copyOf(values);
+        columns = columns == null ? List.of() : List.copyOf(columns);
         keyVariables = keyVariables == null ? null : List.copyOf(keyVariables);
         // Order-preserving and null-tolerant: a key column the row does not carry is a null value,
         // which Map.copyOf rejects.
