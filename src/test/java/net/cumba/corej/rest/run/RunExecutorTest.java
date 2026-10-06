@@ -394,8 +394,9 @@ class RunExecutorTest
 
     /**
      * 5e last LOW (PLAN-ct-packages-default-and-ts-source): re-seeding helps a published package
-     * the store lacks, never one no CDISC CT release carries ({@code CtPresence.UNKNOWN_RELEASE}) —
-     * that abort gets the field remedy without the re-seed advice.
+     * the store lacks, never one no CDISC CT release carries ({@code CtPresence.UNKNOWN_RELEASE})
+     * nor a malformed id ({@code CtPresence.MALFORMED_ID}) — such an abort gets the field remedy
+     * without the re-seed advice.
      */
     @Test
     void aCtAbortForAnUnknownReleaseOmitsTheReSeedRemedy()
@@ -409,6 +410,10 @@ class RunExecutorTest
         String unseeded = "The Define-XML declares controlled-terminology package"
                 + " 'sdtmct-2023-12-15' (def:Standards), which is not held by the metadata store at"
                 + " s.zip. Seed the store with it, or " + hatch;
+        String malformed = "The Define-XML declares controlled-terminology package"
+                + " 'sdtmct-Draft' (def:Standards), which "
+                + net.cumba.corej.core.run.CtPresence.MALFORMED_ID
+                + " (expected <family>ct-<yyyy-mm-dd>). Correct the id, or " + hatch;
         for (boolean seeding : new boolean[]
         {
                 false, true
@@ -417,6 +422,9 @@ class RunExecutorTest
             assertThat(RunExecutor.failureMessage(
                     new net.cumba.corej.core.run.StudyValidationException(unknown), seeding))
                             .startsWith(unknown).contains("-ct <id>").doesNotContain("seed");
+            assertThat(RunExecutor.failureMessage(
+                    new net.cumba.corej.core.run.StudyValidationException(malformed), seeding))
+                            .startsWith(malformed).contains("-ct <id>").doesNotContain("seed");
             assertThat(RunExecutor.failureMessage(
                     new net.cumba.corej.core.run.StudyValidationException(unseeded), seeding))
                             .startsWith(unseeded).endsWith(RunExecutor.CT_HATCH_REMEDY)

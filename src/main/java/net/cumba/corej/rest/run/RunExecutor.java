@@ -210,10 +210,11 @@ public class RunExecutor
         if (message.contains(net.cumba.corej.core.run.CtPresence.CT_FIELD_HATCH))
         {
             // Re-seeding helps a published package the store lacks, never one no CDISC CT release
-            // carries (5e last LOW).
-            return message + (message.contains(net.cumba.corej.core.run.CtPresence.UNKNOWN_RELEASE)
-                    ? CT_HATCH_REMEDY_UNKNOWN_RELEASE
-                    : CT_HATCH_REMEDY);
+            // carries (5e last LOW) nor a malformed id (5e follow-up).
+            boolean seedingCannotHelp = message
+                    .contains(net.cumba.corej.core.run.CtPresence.UNKNOWN_RELEASE)
+                    || message.contains(net.cumba.corej.core.run.CtPresence.MALFORMED_ID);
+            return message + (seedingCannotHelp ? CT_HATCH_REMEDY_NO_SEEDING : CT_HATCH_REMEDY);
         }
         return message;
     }
@@ -232,9 +233,10 @@ public class RunExecutor
 
     /**
      * {@link #CT_HATCH_REMEDY} without the re-seed advice, for the engine's abort on a package no
-     * CDISC CT release carries ({@code CtPresence.UNKNOWN_RELEASE}): seeding cannot supply it.
+     * CDISC CT release carries ({@code CtPresence.UNKNOWN_RELEASE}) or on a malformed id ({@code
+     * CtPresence.MALFORMED_ID}): seeding cannot supply either.
      */
-    static final String CT_HATCH_REMEDY_UNKNOWN_RELEASE = " This service has no CT Packages field:"
+    static final String CT_HATCH_REMEDY_NO_SEEDING = " This service has no CT Packages field:"
             + " run the study from the data browser or the command line (-ct <id>), where an"
             + " explicit CT selection takes the define's declaration and the Trial Summary out of"
             + " play.";
