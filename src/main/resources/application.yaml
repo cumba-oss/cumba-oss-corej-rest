@@ -79,6 +79,18 @@ corej:
   #                                 # refresh: true replaces it, because that is a downgrade.
   cache-seed:
     enabled: false
+  # ---- the brand of the bundled SPA (-Pbundle-web; PLAN-web-branding-and-theme) -------------
+  # A brand is a named folder (brand.css with the design tokens for light and dark, an optional
+  # brand.json for a logo) served as /brand/. `neutral` (the default look) and `p300` ship with
+  # the SPA; a brand of your own goes to <directory>/<name>/ — the launcher's .conf points
+  # directory at the bundle's config/brands (COREJ_BRAND_DIRECTORY overrides it). An unknown or
+  # invalid name FAILS START-UP naming the available brands; nothing is served silently.
+  # ⚠ The environment variable is COREJ_BRAND_NAME — COREJ_BRAND maps to the `brand` object
+  # itself, which no string binds to: the service refuses to start. An API-only jar (no bundled
+  # SPA) ignores both keys.
+  brand:
+    name: neutral
+    directory:
   runs:
     # Global cap on concurrently-executing check runs across ALL sessions. Runs beyond this
     # sit queued (status PENDING) until a worker frees up.

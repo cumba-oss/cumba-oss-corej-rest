@@ -24,6 +24,8 @@ public class CorejProperties
 
     private final CacheSeed cacheSeed = new CacheSeed();
 
+    private final Brand brand = new Brand();
+
     public Sessions getSessions()
     {
         return sessions;
@@ -57,6 +59,12 @@ public class CorejProperties
     public CacheSeed getCacheSeed()
     {
         return cacheSeed;
+    }
+
+
+    public Brand getBrand()
+    {
+        return brand;
     }
 
     /** Validation-engine defaults applied to runs unless the request overrides them. */
@@ -420,6 +428,52 @@ public class CorejProperties
         public void setRefresh(boolean refresh)
         {
             this.refresh = refresh;
+        }
+    }
+
+
+    /**
+     * {@code corej.brand.*}: the look of the bundled SPA (PLAN-web-branding-and-theme §5.5). The
+     * brand is a named folder — {@code brand.css} and an optional {@code brand.json} — looked up
+     * under {@link #getDirectory() directory} first, then among the brands packaged with the SPA.
+     * Read by {@link BrandResourceConfig}; inert in an API-only build (the default build — the SPA
+     * is bundled only where the pom carries the {@code bundle-web} profile and it is switched on).
+     */
+    public static class Brand
+    {
+
+        /**
+         * The brand's name; {@code COREJ_BRAND_NAME} ({@code COREJ_BRAND} maps to this object and
+         * refuses to start).
+         */
+        private String name = "neutral";
+
+        /**
+         * Where extra brands live ({@code <directory>/<name>/brand.css}); blank = packaged only.
+         */
+        private @Nullable String directory;
+
+        public String getName()
+        {
+            return name;
+        }
+
+
+        public void setName(String aName)
+        {
+            name = aName;
+        }
+
+
+        public @Nullable String getDirectory()
+        {
+            return directory;
+        }
+
+
+        public void setDirectory(@Nullable String aDirectory)
+        {
+            directory = aDirectory;
         }
     }
 }

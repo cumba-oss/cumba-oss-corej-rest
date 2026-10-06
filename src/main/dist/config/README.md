@@ -31,3 +31,12 @@ applies its `[properties]` with an unconditional `System.setProperty` and overwr
 They are read by the engine directly from the environment and system properties, never through
 Spring's `Environment`. Put them in `cumba-oss-corej-rest.conf`, where the bundle already sets
 them to its own `rules/`, `rules-define/` and `dictionaries/` directories.
+
+**`brands/`** — with the SPA bundled into the jar (`-Pbundle-web`), a brand of your own is a folder
+`brands/<name>/` here (a `brand.css` with the design tokens, an optional `brand.json` for a logo;
+the contract is `brands/README.md` in the web repository), selected with `COREJ_BRAND_NAME=<name>`
+(⚠ not `COREJ_BRAND`, which maps to the `corej.brand` object itself and refuses to start).
+`neutral` (the default) and `p300` ship with the SPA. The `.conf` points `corej.brand.directory`
+here (`COREJ_BRAND_DIRECTORY` overrides it); an unknown name fails start-up naming the available
+brands. An API-only jar ignores it.
+
