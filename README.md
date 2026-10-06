@@ -336,8 +336,9 @@ something arbitrary. The profile does not change the default build.
 
 Bundled this way, the SPA's **brand** (its look — `brands/README.md` in the web repository) is
 served as `/brand/` by `BrandResourceConfig`: `COREJ_BRAND_NAME=<name>` selects it (`neutral` by
-default, `p300` ships with the SPA; ⚠ `COREJ_BRAND` is not the variable — it maps to the
-`corej.brand` object itself and the service refuses to start), looked up under
+default, `p300` ships with the SPA; ⚠ `COREJ_BRAND` is not the variable — it names the
+`corej.brand` object, selects nothing, and the service refuses to start on it rather than silently
+serving `neutral`), looked up under
 `corej.brand.directory` first (`config/brands/` of the bundle, or `COREJ_BRAND_DIRECTORY`) and then
 among the brands packaged with the SPA. An unknown or invalid name **fails start-up** naming the
 available ones. An API-only jar serves no `/brand/`.

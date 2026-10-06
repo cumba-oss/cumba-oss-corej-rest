@@ -86,8 +86,8 @@ corej:
   # directory at the bundle's config/brands (COREJ_BRAND_DIRECTORY overrides it). An unknown or
   # invalid name FAILS START-UP naming the available brands; nothing is served silently.
   # ⚠ The environment variable is COREJ_BRAND_NAME — COREJ_BRAND maps to the `brand` object
-  # itself, which no string binds to: the service refuses to start. An API-only jar (no bundled
-  # SPA) ignores both keys.
+  # itself and selects nothing (the binder would drop it silently), so the service refuses to
+  # start on it. An API-only jar (no bundled SPA) ignores name and directory, not that refusal.
   brand:
     name: neutral
     directory:

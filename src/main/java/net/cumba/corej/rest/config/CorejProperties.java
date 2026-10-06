@@ -443,8 +443,8 @@ public class CorejProperties
     {
 
         /**
-         * The brand's name; {@code COREJ_BRAND_NAME} ({@code COREJ_BRAND} maps to this object and
-         * refuses to start).
+         * The brand's name; {@code COREJ_BRAND_NAME} ({@code COREJ_BRAND} names this object,
+         * selects nothing, and {@link BrandResourceConfig} refuses start-up on it).
          */
         private String name = "neutral";
 
