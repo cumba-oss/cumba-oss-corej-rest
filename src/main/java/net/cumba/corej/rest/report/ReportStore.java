@@ -362,9 +362,10 @@ public class ReportStore
 
 
     /**
-     * The {@code { source, expanded }} definition for one rule, or {@code null} when the run has no
-     * rule-definitions file or no entry for the id. For an expanded id (e.g. {@code CG0001-AGE})
-     * with no own entry, falls back to the base id ({@code CG0001}) for the {@code source}.
+     * The {@code { source, expanded, outputVariables }} definition for one rule, or {@code null}
+     * when the run has no rule-definitions file or no entry for the id. For an expanded id (e.g.
+     * {@code CG0001-AGE}) with no own entry, falls back to the base id ({@code CG0001}) for the
+     * {@code source}.
      *
      * @param runId
      *            the run id

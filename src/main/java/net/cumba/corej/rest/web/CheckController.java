@@ -400,7 +400,8 @@ public class CheckController
                     + "non-generated rules). Either may be null; 404 when neither is found. "
                     + "outputVariables lists the report columns of the rule shown (expanded, else "
                     + "source): { effective, authored, excluded, derived } — effective in report "
-                    + "order, authored the subset the rule writes, excluded its !X names, derived "
+                    + "order, authored the include entries the author wrote (not necessarily in "
+                    + "effective when the rule failed to load), excluded its !X names, derived "
                     + "false when the rule failed to load (effective is then the authored list); "
                     + "absent for runs persisted before it existed.")
     @ApiResponses(

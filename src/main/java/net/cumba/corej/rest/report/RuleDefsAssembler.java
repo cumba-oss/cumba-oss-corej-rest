@@ -63,7 +63,7 @@ public final class RuleDefsAssembler
      */
     public static String assemble(StudyValidationResult result)
     {
-        // coreId -> { source, expanded }
+        // coreId -> { source, expanded, outputVariables }
         Map<String, ObjectNode> byId = new LinkedHashMap<>();
         // coreId -> the rule the overlay shows (expanded ?? source); the listing is read from it
         Map<String, Rule> shown = new LinkedHashMap<>();
