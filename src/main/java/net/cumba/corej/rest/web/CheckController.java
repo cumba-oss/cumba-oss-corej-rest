@@ -395,9 +395,14 @@ public class CheckController
     @GetMapping(path = "/api/checks/{id}/rules/{coreId}/definition",
             produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Get the run-scoped source + expanded definition of one rule",
-            description = "{ source, expanded } — source is the run's raw rule object, expanded is the "
-                    + "synthetic generated rule that ran (null for non-generated rules). Either may "
-                    + "be null; 404 when neither is found.")
+            description = "{ source, expanded, outputVariables } — source is the run's raw rule "
+                    + "object, expanded is the synthetic generated rule that ran (null for "
+                    + "non-generated rules). Either may be null; 404 when neither is found. "
+                    + "outputVariables lists the report columns of the rule shown (expanded, else "
+                    + "source): { effective, authored, excluded, derived } — effective in report "
+                    + "order, authored the subset the rule writes, excluded its !X names, derived "
+                    + "false when the rule failed to load (effective is then the authored list); "
+                    + "absent for runs persisted before it existed.")
     @ApiResponses(
     {
             @ApiResponse(responseCode = "200", description = "The rule definition"),

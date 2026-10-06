@@ -12,6 +12,7 @@ import java.util.List;
 import net.cumba.corej.rest.config.CorejProperties;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Unit tests for {@link ReportStore} persistence, section projection, paging, caching, deletion.
@@ -505,6 +506,32 @@ class ReportStoreTest
         // Unknown id and unknown run both yield null.
         assertThat(store.ruleDefinition("run-rd", "NOPE")).isNull();
         assertThat(store.ruleDefinition("absent", "CG0001")).isNull();
+    }
+
+
+    @Test
+    void ruleDefinitionServesTheOutputVariablesListingThrough(@TempDir Path dir) throws IOException
+    {
+        // PLAN-rule-catalogue-effective-output-variables C5: the listing the assembler wrote
+        // reaches the caller, on a direct hit and on the base-id fallback; a run persisted before
+        // the change has no key and is served as it is (P5).
+        ReportStore store = newStore(dir, 64, Duration.ofMinutes(30));
+        String listing = "{\"effective\":[\"AESEV\",\"USUBJID\"],\"authored\":[\"USUBJID\"],"
+                + "\"excluded\":[\"AESER\"],\"derived\":true}";
+        store.persistRuleDefs("run-ov",
+                "{\"CG0001\":{\"source\":{\"Description\":\"base\"},\"expanded\":null,"
+                        + "\"outputVariables\":" + listing + "},"
+                        + "\"CG0002\":{\"source\":{\"Description\":\"old\"},\"expanded\":null}}");
+
+        JsonNode direct = store.ruleDefinition("run-ov", "CG0001");
+        assertThat(direct.get("outputVariables").get("authored").get(0).asString())
+                .isEqualTo("USUBJID");
+        assertThat(direct.get("outputVariables").get("excluded").get(0).asString())
+                .isEqualTo("AESER");
+        assertThat(direct.get("outputVariables").get("derived").asBoolean()).isTrue();
+        assertThat(store.ruleDefinition("run-ov", "CG0001-AGE").get("outputVariables")
+                .get("effective").size()).isEqualTo(2);
+        assertThat(store.ruleDefinition("run-ov", "CG0002").has("outputVariables")).isFalse();
     }
 
 

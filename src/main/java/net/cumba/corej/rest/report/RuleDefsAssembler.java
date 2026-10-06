@@ -1,14 +1,19 @@
 package net.cumba.corej.rest.report;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import net.cumba.corej.core.expr.convert.RulePackageExpressionJson;
+import net.cumba.corej.core.model.OutputVariableListing;
 import net.cumba.corej.core.model.Rule;
 import net.cumba.corej.core.run.StudyValidationResult;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
@@ -25,9 +30,22 @@ import tools.jackson.databind.node.ObjectNode;
  * notation (the engine model holds the lowered legacy tree; leaves with no expression surface stay
  * old-style).
  * </p>
+ *
+ * <p>
+ * Each entry also carries {@code "outputVariables": { "effective", "authored", "excluded",
+ * "derived" }} ({@code PLAN-rule-catalogue-effective-output-variables} P2; owner D1 (b) / D3,
+ * 2026-10-05): the {@link OutputVariableListing} of the rule the overlay shows — the expanded rule
+ * when the entry has one, else the source rule. {@code source} / {@code expanded} stay the raw
+ * rules, so the overlay's JSON / YAML tabs keep showing the rule as written. A rule whose listing
+ * cannot be computed loses only its own key (logged); the document — and every other entry — is
+ * still written. A run persisted before this key existed has none, and the overlay shows no section
+ * for it.
+ * </p>
  */
 public final class RuleDefsAssembler
 {
+
+    private static final Logger LOG = LoggerFactory.getLogger(RuleDefsAssembler.class);
 
     private static final JsonMapper MAPPER = JsonMapper.builder().build();
 
@@ -47,6 +65,8 @@ public final class RuleDefsAssembler
     {
         // coreId -> { source, expanded }
         Map<String, ObjectNode> byId = new LinkedHashMap<>();
+        // coreId -> the rule the overlay shows (expanded ?? source); the listing is read from it
+        Map<String, Rule> shown = new LinkedHashMap<>();
         for (Rule r : result.rules())
         {
             // A loaded rule always carries a CORE id or a rule id (it is keyed by one); guard the
@@ -55,12 +75,14 @@ public final class RuleDefsAssembler
                     "rule has neither a CORE id nor an id");
             ObjectNode entry = byId.computeIfAbsent(coreId, _ -> newEntry());
             entry.set("source", toNode(r));
+            shown.put(coreId, r);
         }
         for (Map.Entry<String, Rule> e : result.generatedRules().entrySet())
         {
             String expandedId = e.getKey();
             ObjectNode entry = byId.computeIfAbsent(expandedId, _ -> newEntry());
             entry.set("expanded", toNode(e.getValue()));
+            shown.put(expandedId, e.getValue());
             // The expanded row's Source tab shows its originating template. Generated rules are
             // keyed by the expanded id (e.g. CG0001-AGE) while their source template is keyed by
             // the base id (CG0001), so copy the base source onto the expanded entry — otherwise a
@@ -75,12 +97,57 @@ public final class RuleDefsAssembler
                 }
             }
         }
+        // After the expanded loop, so an expanded entry lists its own rule — a source copied from
+        // the base template does not change which rule the overlay shows.
+        for (Map.Entry<String, ObjectNode> e : byId.entrySet())
+        {
+            Rule rule = shown.get(e.getKey());
+            if (rule != null)
+            {
+                putOutputVariables(e.getValue(), e.getKey(), rule);
+            }
+        }
         ObjectNode root = MAPPER.createObjectNode();
         for (Map.Entry<String, ObjectNode> e : byId.entrySet())
         {
             root.set(e.getKey(), e.getValue());
         }
         return root.toPrettyString();
+    }
+
+
+    /**
+     * Sets {@code outputVariables} on {@code entry} from {@code rule}'s
+     * {@link OutputVariableListing}. A listing that throws omits the key and is logged: one rule
+     * must not cost the run its whole {@code rules-<runId>.json} ({@code RunExecutor} persists
+     * nothing when the assembler throws).
+     */
+    private static void putOutputVariables(ObjectNode entry, String coreId, Rule rule)
+    {
+        OutputVariableListing listing;
+        try
+        {
+            listing = OutputVariableListing.of(rule);
+        }
+        catch (RuntimeException e)
+        {
+            LOG.warn("Rule {}: no Output_Variables listing for its definition", coreId, e);
+            return;
+        }
+        ObjectNode node = entry.putObject("outputVariables");
+        putAll(node.putArray("effective"), listing.effective());
+        putAll(node.putArray("authored"), listing.authored());
+        putAll(node.putArray("excluded"), listing.excluded());
+        node.put("derived", listing.derived());
+    }
+
+
+    private static void putAll(ArrayNode array, List<String> values)
+    {
+        for (String v : values)
+        {
+            array.add(v);
+        }
     }
 
 

@@ -25,6 +25,9 @@ class RuleDefsAssemblerTest
 
     private static final JsonMapper MAPPER = JsonMapper.builder().build();
 
+    private static final String AE_CHECK = "\"Check\":{\"expression\":"
+            + "\"AESEV == \\\"MILD\\\" and AESER == \\\"Y\\\"\"}";
+
     private static Rule rule(String coreId, String description)
     {
         Rule r = new Rule();
@@ -258,5 +261,127 @@ class RuleDefsAssemblerTest
                 .get(0);
 
         assertThat(op.get("expression").asString()).isEqualTo("variable_count(--LNKGRP)");
+    }
+
+    // ---- outputVariables (PLAN-rule-catalogue-effective-output-variables P2 / C5) ----
+
+
+    private static List<String> strings(JsonNode array)
+    {
+        List<String> out = new java.util.ArrayList<>();
+        for (JsonNode n : array)
+        {
+            out.add(n.asString());
+        }
+        return out;
+    }
+
+
+    @Test
+    void aPlainRuleCarriesItsEffectiveAuthoredAndExcludedLists() throws Exception
+    {
+        Rule r = loadRule("{\"Core\":{\"Id\":\"CG0010\",\"Status\":\"Draft\",\"Version\":\"1\"},"
+                + AE_CHECK + ",\"Outcome\":{\"Message\":\"m\",\"Output_Variables\":"
+                + "[\"USUBJID\",\"!AESER\"]}}");
+        JsonNode entry = MAPPER.readTree(RuleDefsAssembler.assemble(result(List.of(r), Map.of())))
+                .get("CG0010");
+        JsonNode ov = entry.get("outputVariables");
+
+        assertThat(ov).as("the listing sits beside source / expanded").isNotNull();
+        assertThat(strings(ov.get("effective"))).isEqualTo(r.effectiveOutputVariablesOrAuthored())
+                .contains("USUBJID", "AESEV").doesNotContain("AESER");
+        assertThat(strings(ov.get("authored"))).containsExactly("USUBJID");
+        assertThat(strings(ov.get("excluded"))).containsExactly("AESER");
+        assertThat(ov.get("derived").asBoolean()).isTrue();
+        // The raw rule is untouched: source still shows only what the author wrote.
+        assertThat(strings(entry.get("source").get("Outcome").get("Output_Variables")))
+                .containsExactly("USUBJID", "!AESER");
+    }
+
+
+    @Test
+    void aRuleAuthoringNothingListsTheDerivedColumnsOnly() throws Exception
+    {
+        Rule r = loadRule("{\"Core\":{\"Id\":\"CG0011\",\"Status\":\"Draft\",\"Version\":\"1\"},"
+                + AE_CHECK + "}");
+        JsonNode ov = MAPPER.readTree(RuleDefsAssembler.assemble(result(List.of(r), Map.of())))
+                .get("CG0011").get("outputVariables");
+
+        assertThat(strings(ov.get("authored"))).isEmpty();
+        assertThat(strings(ov.get("excluded"))).isEmpty();
+        assertThat(strings(ov.get("effective"))).contains("AESEV", "AESER");
+        assertThat(ov.get("derived").asBoolean()).isTrue();
+    }
+
+
+    @Test
+    void anExpandedEntryListsItsOwnRuleNotTheTemplate() throws Exception
+    {
+        Rule base = loadRule("{\"Core\":{\"Id\":\"CG0012\",\"Status\":\"Draft\",\"Version\":\"1\"},"
+                + AE_CHECK + "}");
+        Rule gen = loadRule("{\"Core\":{\"Id\":\"CG0012-AGE\",\"Status\":\"Draft\",\"Version\":"
+                + "\"1\"},\"Check\":{\"expression\":\"AGE > 18\"}}");
+        JsonNode root = MAPPER.readTree(
+                RuleDefsAssembler.assemble(result(List.of(base), Map.of("CG0012-AGE", gen))));
+
+        JsonNode expanded = root.get("CG0012-AGE");
+        // The expanded entry's source is the copied template, but its listing is the expanded
+        // rule's - the rule the overlay shows (def.expanded ?? def.source).
+        assertThat(expanded.get("source").get("Core").get("Id").asString()).isEqualTo("CG0012");
+        assertThat(strings(expanded.get("outputVariables").get("effective"))).contains("AGE")
+                .doesNotContain("AESEV", "AESER");
+        assertThat(strings(root.get("CG0012").get("outputVariables").get("effective")))
+                .contains("AESEV", "AESER").doesNotContain("AGE");
+    }
+
+
+    @Test
+    void aRuleThatFailedToLoadIsListedAsAuthoredAndNotDerived() throws Exception
+    {
+        Rule r = loadRule("{\"Core\":{\"Id\":\"CG0013\",\"Status\":\"Draft\",\"Version\":\"1\"},"
+                + "\"Check\":{\"expression\":\"no_such_function(AESEV)\"},"
+                + "\"Outcome\":{\"Message\":\"m\",\"Output_Variables\":[\"AESEV\",\"!AESER\"]}}");
+        assertThat(r.getLoadError()).as("premise: the rule failed to load").isNotNull();
+        JsonNode ov = MAPPER.readTree(RuleDefsAssembler.assemble(result(List.of(r), Map.of())))
+                .get("CG0013").get("outputVariables");
+
+        assertThat(ov.get("derived").asBoolean()).isFalse();
+        assertThat(strings(ov.get("effective"))).containsExactly("AESEV");
+        assertThat(strings(ov.get("authored"))).containsExactly("AESEV");
+        assertThat(strings(ov.get("excluded"))).containsExactly("AESER");
+    }
+
+    /** A rule whose effective list cannot be computed - a small fake, not a mock. */
+    private static final class UnlistableRule extends Rule
+    {
+
+        UnlistableRule(String coreId)
+        {
+            setId("uuid-" + coreId);
+            RuleCore core = new RuleCore();
+            core.setId(coreId);
+            setCore(core);
+        }
+
+
+        @Override
+        public List<String> effectiveOutputVariablesOrAuthored()
+        {
+            throw new IllegalStateException("planted: no listing");
+        }
+    }
+
+    @Test
+    void aThrowingListingLosesOnlyItsOwnKey()
+    {
+        // L3: one rule whose listing throws must not lose the whole run's rules-<runId>.json
+        // (RunExecutor.persistRuleDefsQuietly writes nothing when the assembler throws).
+        String json = RuleDefsAssembler.assemble(
+                result(List.of(new UnlistableRule("CG0014"), rule("CG0015", "fine")), Map.of()));
+        JsonNode root = MAPPER.readTree(json);
+
+        assertThat(root.get("CG0014").has("source")).isTrue();
+        assertThat(root.get("CG0014").has("outputVariables")).isFalse();
+        assertThat(root.get("CG0015").has("outputVariables")).isTrue();
     }
 }
