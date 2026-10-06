@@ -191,6 +191,7 @@ public class RunExecutor
 
     /**
      * The failure text a caller reads: the exception's message, plus this surface's remedy when the
+     * engine's CT abort names a field REST does not have ({@link #CT_HATCH_REMEDY}), or when the
      * cause is an old-format metadata store (PLAN-define-ct-evaluation T1-10 m1 — the engine's
      * message is neutral; the surface that knows what its operator can do appends it). The remedy
      * depends on whether seeding is already on: review round 1 (REST L1) found the previous text
@@ -206,9 +207,24 @@ public class RunExecutor
         {
             return message + CacheSeedInitializer.storeFormatRemedy(e, aSeedingEnabled);
         }
+        if (message.contains(net.cumba.corej.core.run.CtPresence.CT_FIELD_HATCH))
+        {
+            return message + CT_HATCH_REMEDY;
+        }
         return message;
     }
 
+    /**
+     * PLAN-ct-packages-default-and-ts-source CQ10 (a), owner 2026-10-05: the engine's DEFINE- and
+     * TS-source CT aborts name the data browser's {@code CT Packages} field, which a REST run (and
+     * the web SPA) does not have — every REST run is blank, so it takes the define's CT, else the
+     * Trial Summary's. This surface's own remedy: the operator re-seeds the server's store, or the
+     * run is started from a surface that has the field.
+     */
+    static final String CT_HATCH_REMEDY = " This service has no CT Packages field: re-seed the"
+            + " server's metadata store with that package (start-up seeding), or run the study"
+            + " from the data browser or the command line (-ct <id>), where an explicit CT"
+            + " selection takes the define's declaration and the Trial Summary out of play.";
 
     /**
      * Append a terminating throwable's rendered stack trace to the run log, one entry per line.

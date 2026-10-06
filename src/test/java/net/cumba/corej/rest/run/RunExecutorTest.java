@@ -363,6 +363,36 @@ class RunExecutorTest
 
 
     /**
+     * CQ10 (a) (PLAN-ct-packages-default-and-ts-source): the engine's CT abort tells the user to
+     * fill a CT Packages field REST does not have, so this surface appends its own remedy — for the
+     * Trial Summary source and the define source alike — and leaves every other failure alone.
+     */
+    @Test
+    void aCtAbortNamesTheRemedyThisSurfaceCanFollow()
+    {
+        String ts = "The Trial Summary (TS) states controlled-terminology package"
+                + " 'sdtmct-2023-12-15' (TSVCDREF \"CDISC CT\", TSVCDVER \"2023-12-15\"), which is"
+                + " not held by the metadata store at s.zip. Seed the store with it, or "
+                + net.cumba.corej.core.run.CtPresence.CT_FIELD_HATCH
+                + " - an explicit selection takes the Trial Summary out of play.";
+        for (boolean seeding : new boolean[]
+        {
+                false, true
+        })
+        {
+            assertThat(RunExecutor.failureMessage(
+                    new net.cumba.corej.core.run.StudyValidationException(ts), seeding))
+                            .startsWith(ts).endsWith(RunExecutor.CT_HATCH_REMEDY)
+                            .contains("re-seed the server's metadata store").contains("-ct <id>");
+        }
+        assertThat(RunExecutor.failureMessage(new net.cumba.corej.core.run.StudyValidationException(
+                "Controlled-terminology package 'sdtmct-2020-01-01' was requested, but it is not"
+                        + " held by the metadata store at s.zip."),
+                true)).doesNotContain(RunExecutor.CT_HATCH_REMEDY);
+    }
+
+
+    /**
      * The counterpart: a real result succeeds AND leaves the report artifacts behind. Without this
      * the persist block has no coverage in either direction (the four VoidMethodCall mutants on it
      * were NO_COVERAGE).
