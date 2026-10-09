@@ -1,0 +1,86 @@
+# syntax=docker/dockerfile:1
+#
+# CI runtime image for the CDISC REST service (PLAN-ci-snapshots-and-container-images
+# D5). No Maven: it layers a JRE over the release bundle the workflow's build job
+# already produced, so the Java build runs once and the image carries the same bytes
+# as the release zip — no snapshot resolution and no Maven secret inside `docker build`.
+#
+# Context is THIS REPOSITORY. The build job uploads target/cumba-oss-corej-rest-<version>.zip
+# (the release zip, on every push); the publish-image job of .github/workflows/ci.yml
+# unzips it and strips the zip's single top-level cumba-oss-corej-rest-<version>/ directory
+# into image-ctx/corej-rest/ (target/ is excluded by .dockerignore, image-ctx/
+# deliberately is not). By hand, from a built tree:
+#
+#   mkdir -p image-ctx && rm -rf image-ctx/corej-rest
+#   cp -a target/cumba-oss-corej-rest-<v>/cumba-oss-corej-rest-<v> image-ctx/corej-rest
+#   docker build -f Dockerfile.runtime -t corej-rest:local .
+#
+# Published as docker.io/p300/corej-rest (README § Container image). The base image
+# is the build arg RUNTIME_IMAGE; CI keeps the default, Docker Hub's eclipse-temurin:25-jre.
+# The runtime stage matches the self-building Dockerfile's (user, layout, volume
+# dirs, environment, entrypoint) — keep the two in step.
+#
+# ⚠⚠ API-ONLY — same as the sibling Dockerfile, for the same reasons. See it for the
+# detail.
+
+ARG RUNTIME_IMAGE=eclipse-temurin:25-jre
+FROM ${RUNTIME_IMAGE} AS runtime
+
+# curl: used by the compose healthcheck against /api/info.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl \
+ && rm -rf /var/lib/apt/lists/*
+
+# Non-root runtime user pinned to uid/gid 1000 (same rationale as the
+# self-building Dockerfile): a bind-mounted host dir keeps its ownership, so the
+# in-container user must share uid 1000. Free up 1000 first so the pin can't
+# collide with the base image's default user.
+RUN set -eu; \
+    existing_user="$(getent passwd 1000 | cut -d: -f1 || true)"; \
+    [ -z "$existing_user" ] || userdel -r "$existing_user" 2>/dev/null || userdel "$existing_user" 2>/dev/null || true; \
+    existing_group="$(getent group 1000 | cut -d: -f1 || true)"; \
+    [ -z "$existing_group" ] || groupdel "$existing_group" 2>/dev/null || true; \
+    groupadd --gid 1000 corej; \
+    useradd --uid 1000 --gid 1000 --home-dir /app --shell /usr/sbin/nologin corej
+
+WORKDIR /app
+
+# The exploded dist bundle: cumba-oss-corej-rest.jar (the cumba-bootstrap launcher) and
+# its sidecar .conf, flat lib/, run.sh, config/, and the three store directories —
+# rules/ and rules-define/ POPULATED with the pinned corpus (since 2026-09-11),
+# dictionaries/ empty, each holding a README. Staged by the publish-image job into
+# image-ctx/ — target/ is .dockerignore'd, image-ctx/ is not.
+COPY image-ctx/corej-rest/ /app/dist/
+# ⚠ No corej-cli bundle: in the monorepo the image carried one as the dictionary
+# installer, built from a sibling module that is a separate repository now. The
+# entrypoint's auto-convert and opt-in auto-download degrade to a warning; it seeds
+# the bundled corpora onto /app/data if absent, never overwriting one already there.
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+
+# Same /app/data layout as the self-building Dockerfile — and the same two
+# omissions, for the same reasons: no /app/data/cache (the retired CDISC Library
+# web-API cache, read by nothing, and its presence would make the entrypoint's
+# migration notice fire spuriously), and no metadata-store FILE (the store is a
+# zip at CDISC_METADATA_STORE, default /app/data/metadata-cache.zip; an empty
+# placeholder would be accepted as configured and then fail to open).
+RUN mkdir -p /app/data/sessions /app/data/reports /app/data/rules \
+       /app/data/rules-define /app/data/dictionaries \
+ && chmod +x /app/docker-entrypoint.sh /app/dist/run.sh \
+ && chown -R corej:corej /app
+
+# The external-dictionary store on the persistent /app/data volume
+# (PLAN-dictionary-seeder D12: coreJ ships NO dictionary data; until an operator
+# installs, all dictionary rules SKIP loudly by name). See the entrypoint for the
+# auto-convert (/licensed-dictionaries/<type>) and the opt-in auto-download
+# (COREJ_DICTIONARY_AUTO_INSTALL=1).
+ENV COREJ_RULES_DIR=/app/data/rules
+ENV COREJ_DEFINE_RULES_DIR=/app/data/rules-define
+ENV COREJ_DICTIONARIES_DIR=/app/data/dictionaries
+ENV CDISC_METADATA_STORE=/app/data/metadata-cache.zip
+
+USER corej
+EXPOSE 8080
+
+# Entrypoint seeds default rules into the mounted data dir, then exec's run.sh,
+# which exec's the JVM (java stays PID 1). JAVA_TOOL_OPTIONS is honoured by the JVM.
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

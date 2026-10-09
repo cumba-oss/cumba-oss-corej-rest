@@ -118,6 +118,47 @@ mvn -B clean install -Drevision=0.2.0-SNAPSHOT \
 CI then runs a Pitest mutation pass (`-P Pitest`) on top, and — on Gitea only — Sonar, the Nexus
 deploy and the release.
 
+## Building `main`
+
+On `main` the version is a `-SNAPSHOT`, and so is every sibling `cumba-oss-*`
+artifact it depends on. Each sibling publishes its snapshot to the Central
+Portal snapshot repository on every push to its `main`. The poms deliberately
+name no snapshot repository, so a clone that has not built the siblings itself
+needs a settings file that adds it (the same one CI writes):
+
+```xml
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 https://maven.apache.org/xsd/settings-1.2.0.xsd">
+  <profiles>
+    <profile>
+      <id>central-portal-snapshots</id>
+      <repositories>
+        <repository>
+          <id>central-portal-snapshots</id>
+          <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+          <releases><enabled>false</enabled></releases>
+          <snapshots><enabled>true</enabled></snapshots>
+        </repository>
+      </repositories>
+    </profile>
+  </profiles>
+  <activeProfiles>
+    <activeProfile>central-portal-snapshots</activeProfile>
+  </activeProfiles>
+</settings>
+```
+
+```bash
+mvn -gs central-snapshots.xml clean install
+```
+
+`-gs` replaces only the Maven installation's global settings; your
+`~/.m2/settings.xml` still applies. Alternatively install the siblings locally,
+in order: commons → formats → datatable → swingx-msp → corej. A release build
+(a tag) never needs this: it depends on released versions from Maven Central
+only. Central deletes snapshots after 90 days.
+
 ## Running
 
 The Spring Boot entry point is `net.cumba.corej.rest.CorejRestApplication`. It serves on port
@@ -391,6 +432,22 @@ discovered per run:
   `COREJ_CACHESEED_REFRESH=true` replaces it.
   ⚠ A `corej-data/api-cache` left over from an earlier deployment is the **retired** web-API cache;
   nothing reads it, and the container says so once at startup.
+
+## Container image
+
+CI publishes **`docker.io/p300/corej-rest`** to Docker Hub, for linux/amd64 and linux/arm64. The
+`publish-image` job of `.github/workflows/ci.yml` builds [`Dockerfile.runtime`](Dockerfile.runtime)
+from the release zip the build job produced — the zip's bundle (top-level directory stripped) under
+a JRE — so the image carries the release's bytes and no Maven runs inside the image build.
+
+| pushed by      | tags                                                                                             |
+| -------------- | ------------------------------------------------------------------------------------------------ |
+| a tag `vX.Y.Z` | `X.Y.Z` and `latest` — `latest` only ever means a release                                        |
+| a push to main | `X.Y.Z-SNAPSHOT`, the pom's `<revision>` (moves with main), and `sha-<short commit>` (immutable) |
+
+The self-building `Dockerfile` and `docker-compose.yml` above stay for local builds from the
+sources; the two runtime stages are kept in step. `cumba-oss-corej-web`'s `docker-compose.yml`
+runs this image behind the validator SPA.
 
 ## What is deliberately not here
 
