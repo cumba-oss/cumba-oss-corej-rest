@@ -81,3 +81,6 @@ __pycache__/
 # /app/data, where it holds uploaded study files, per-run reports, an installed
 # dictionary set and a seeded CDISC Library API cache. None of that belongs in git.
 /corej-data/
+
+# CI's image staging (publish-image job): the release zip unpacked for Dockerfile.runtime.
+/image-ctx/
