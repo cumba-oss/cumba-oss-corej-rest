@@ -506,7 +506,7 @@ class StudyValidationCheckRunnerTest
         // -mp tokens are resolved onto full standards/... cache keys (full-form tokens
         // resolve with or without a configured metadata store).
         assertThat(p.metadataProducts()).containsExactly("standards/tig/1-0/adam");
-        assertThat(p.useCase()).isEqualTo("uc");
+        assertThat(p.useCase()).isEqualTo("UC");
         assertThat(p.defineVersion()).isEqualTo("2.1");
         assertThat(p.defineXmlPath())
                 .isEqualTo(session.directory().resolve("define.xml").toString());
