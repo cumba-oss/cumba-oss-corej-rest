@@ -525,8 +525,10 @@ smoke:   rules-$p.json: $(run_rule_id "$st")$(run_message "$st")"
                 # "The selected rule package(s) declare a CDISC Library standard that
                 # cannot be resolved." That is a CORPUS fault, deliberately fail-loud
                 # under Q1, and three packages of the corpus pinned at the time hit it
-                # (the sendig-dart-1-2 packages declared sendig/dart-1-2, which CDISC
-                # never published). Matching the remedy sentence counted
+                # (the sendig-dart-1-2 packages declared sendig/dart-1-2, which the CDISC
+                # Library does not serve; since PLAN-seed-sendig-dart-1-2 the store seeds it
+                # from the E14 supplement, so only a store seeded before that still hits it,
+                # with a re-seed message). Matching the remedy sentence counted
                 # those three corpus defects as legitimate refusals and exited 0 with
                 # `succeeded >= 1` satisfied by a single package — the very swallow this
                 # split was written to end, one message further in.
