@@ -100,6 +100,20 @@ public class StudyValidationCheckRunner implements CheckRunner
 
 
     /**
+     * The manager a validation run loads its data through: dictionary formats switched off
+     * (PLAN-dictionary-backed-formats, owner ruling OQ3 (a), 2026-10-10). The engine reads the
+     * dictionaries itself and reads no format, so resolving them at load would only parse every
+     * dictionary the define binds a second time, on every run.
+     *
+     * @return a new local manager with dictionary formats switched off.
+     */
+    static LocalDataTableManager validationManager()
+    {
+        return new LocalDataTableManager(false);
+    }
+
+
+    /**
      * Validate a request against its session before a run is created. Checks required fields, that
      * every referenced file is a bare name actually present in the session, and that every
      * {@code referenceDataFilenames} entry names a format some registered library supplier can
@@ -110,7 +124,7 @@ public class StudyValidationCheckRunner implements CheckRunner
      */
     public static void validate(CheckRunRequest req, Session session)
     {
-        validate(req, session, new LocalDataTableManager(), null);
+        validate(req, session, validationManager(), null);
     }
 
 
@@ -130,7 +144,7 @@ public class StudyValidationCheckRunner implements CheckRunner
     public static void validate(CheckRunRequest req, Session session,
             @Nullable String aMetadataStore)
     {
-        validate(req, session, new LocalDataTableManager(), aMetadataStore);
+        validate(req, session, validationManager(), aMetadataStore);
     }
 
 
@@ -310,7 +324,7 @@ public class StudyValidationCheckRunner implements CheckRunner
             @Nullable String metadataStore)
     {
         CheckRunRequest req = run.request();
-        IDataTableManager manager = new LocalDataTableManager();
+        IDataTableManager manager = validationManager();
         StudyValidationParams.Builder b = StudyValidationParams.builder().manager(manager)
                 .dataLibrary(session.directory().toString()).useCase(req.useCase())
                 // -mp tokens are resolved against the catalogue of the store THIS run reads
