@@ -2439,23 +2439,6 @@
                                         <ignore/>
                                     </action>
                                 </pluginExecution>
-                                <pluginExecution>
-                                    <!-- The corpus downloads only feed the packaged distribution;
-                                         in Eclipse they would need the Gitea token in the IDE's
-                                         environment (401 otherwise) and a network fetch on
-                                         incremental builds. The command line still runs them. -->
-                                    <pluginExecutionFilter>
-                                        <groupId>com.googlecode.maven-download-plugin</groupId>
-                                        <artifactId>download-maven-plugin</artifactId>
-                                        <versionRange>[1.0,)</versionRange>
-                                        <goals>
-                                            <goal>wget</goal>
-                                        </goals>
-                                    </pluginExecutionFilter>
-                                    <action>
-                                        <ignore/>
-                                    </action>
-                                </pluginExecution>
                             </pluginExecutions>
                         </lifecycleMappingMetadata>
                     </configuration>
