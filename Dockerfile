@@ -17,7 +17,7 @@
 # docker-compose.yml sets `context: .`. The repository is flat and single-module,
 # so it builds itself, and the .dockerignore beside this file governs the context.
 
-ARG MAVEN_IMAGE=maven:3.9-eclipse-temurin-25
+ARG MAVEN_IMAGE=maven:3.10-eclipse-temurin-25
 ARG RUNTIME_IMAGE=eclipse-temurin:25-jre
 
 # ---------- build stage ----------

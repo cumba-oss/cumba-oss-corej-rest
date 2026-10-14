@@ -84,7 +84,7 @@ don't assume re-downloading a tag returns the same bytes.
 
 ## Build
 
-Java 25, Maven 3.9.12+.
+Java 25, Maven 3.10.0+.
 
 ```bash
 mvn -B clean install -Drevision=0.2.0-SNAPSHOT

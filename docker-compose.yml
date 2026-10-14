@@ -28,7 +28,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        MAVEN_IMAGE: ${MAVEN_IMAGE:-maven:3.9-eclipse-temurin-25}
+        MAVEN_IMAGE: ${MAVEN_IMAGE:-maven:3.10-eclipse-temurin-25}
         RUNTIME_IMAGE: ${RUNTIME_IMAGE:-eclipse-temurin:25-jre}
     image: cumba-oss-corej-rest:local
     init: true

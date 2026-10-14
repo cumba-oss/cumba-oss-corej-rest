@@ -37,7 +37,7 @@
         <java.version>25</java.version>
         <general.encoding>UTF-8</general.encoding>
 
-        <!-- project.basedir requires 3.9.12+ -->
+        <!-- 3.10.0: the stack is gated on it (dependency refresh 2026-10); project.basedir in profile activation alone needs 3.9.12+ -->
         <maven.version>3.10.0</maven.version>
         <!-- revision should be set externally; this is just a fallback -->
         <revision>0.4.0-SNAPSHOT</revision>
@@ -186,7 +186,7 @@
         -->
         <corej.rules.server>https://github.com</corej.rules.server>
         <!-- jackson-annotations is released a patch digit behind the rest of
-             Jackson (2.21, not 2.21.3); see dependencyManagement note below. -->
+             Jackson (2.22, not 2.22.3); see dependencyManagement note below. -->
         <dependency.jackson-annotations.version>2.22</dependency.jackson-annotations.version>
 
         <dependency.plexus-compiler.version>2.17.0</dependency.plexus-compiler.version>
@@ -1720,7 +1720,7 @@
                 <version>${dependency.jackson.version}</version>
             </dependency>
             <!-- jackson-annotations lags the rest of Jackson by a patch digit: it
-                 is released as 2.21, not 2.21.3. Pinning it to
+                 is released as 2.22, not 2.22.3. Pinning it to
                  ${dependency.jackson.version} would request a non-existent artifact,
                  so it carries its own (major.minor) version. Bump alongside
                  dependency.jackson.version. -->
