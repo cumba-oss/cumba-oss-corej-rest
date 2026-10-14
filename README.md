@@ -27,14 +27,14 @@ exactly how `net.cumba:coverage:0.0.4` became public and immutable.
 
 The libraries this service consumes *are* on Central, released separately on their own cadence:
 
-| Library | Version pinned here |
+| Library | Version pinned by |
 |---|---|
-| `cumba-oss-commons` | `0.5.0-SNAPSHOT` |
-| `cumba-oss-datatable` | `0.5.0-SNAPSHOT` |
-| `cumba-oss-corej` | `0.6.0-SNAPSHOT` |
+| `cumba-oss-commons` | `dependency.cumba-oss-commons.version` |
+| `cumba-oss-datatable` | `dependency.cumba-oss-datatable.version` |
+| `cumba-oss-corej` | `dependency.cumba-oss-corej.version` |
 
-(the `dependency.cumba-oss-*.version` properties in `pom.xml`). The web stack is Spring Boot
-`4.1.1` plus springdoc `3.1.0`.
+(properties in `pom.xml`; on `main` each names the sibling's current `-SNAPSHOT`, on a tag a
+release). The web stack is Spring Boot `4.1.1` plus springdoc `3.1.1`.
 
 ## Releases
 
@@ -56,9 +56,9 @@ The two releases are cut independently from the same tag by `.github/workflows/c
 reaches Maven Central.
 
 ⚠ `GPG_PRIVATE_KEY` and `GPG_PASSPHRASE` are **organisation-level** secrets on `cumba-oss`, so
-they are inherited here rather than set per repository. The signing path has run for both tags cut
-so far, `v0.1.0` and `v0.2.0`: each GitHub release carries a `.asc` beside its zip and its jar. The
-release job fails by name on an empty key rather than publishing unsigned assets.
+they are inherited here rather than set per repository. The signing path has run for every tag cut
+so far: each GitHub release carries a `.asc` beside its zip and its jar. The release job fails by
+name on an empty key rather than publishing unsigned assets.
 
 ### Verifying a release asset
 
@@ -317,6 +317,17 @@ Bump the tag, the version and **both** hashes together, and re-measure
 
 ⚠ The build (and a `docker build`) therefore needs access to `github.com` the first time a pin
 is used; afterwards `~/.m2/download-cache` serves it and `mvn -o` works.
+
+### Engine and corpus compatibility
+
+The engine and the corpus each carry a **rule-language level** — `RuleLanguage.LEVEL` in
+`cumba-oss-corej-core`, `rules-src/LANGUAGE-LEVEL` in the corpus (both `5` on `main`); the corpus's
+build fails when its level differs from the engine it is built against. ⚠ The engine does **not**
+read the level at run time, so a corpus of another level is not refused when it loads — it is
+simply unsupported. A release of this bundle pins the corpus release built against its engine
+(`v0.3.0`: engine `0.6.0`, corpus `v0.5.0`); if you point the engine at another corpus, use one
+built against the same engine version. The levels first ship with the next releases: engine 0.7.x
+needs corpus 0.6.x or later.
 
 ### What is in the corpus
 
